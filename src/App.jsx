@@ -1,10 +1,10 @@
-import { Routes, Route, Link } from "react-router-dom";
-import { useLocation } from "react-router-dom";
+import { Routes, Route, Link, useLocation } from "react-router-dom";
 
 import Portada from "./pages/Portada.jsx";
 import Hoy from "./pages/Hoy.jsx";
 import Crear from "./pages/Crear.jsx";
 import ActividadDetalle from "./pages/ActividadDetalle.jsx";
+import SubtareaDetalle from "./pages/SubtareaDetalle.jsx"; 
 import Progreso from "./pages/Progreso.jsx";
 import Actividades from "./pages/Actividades.jsx";
 import Conexion from "./pages/Conexion.jsx";
@@ -35,7 +35,12 @@ export default function App() {
         <Route path="/" element={<Portada />} />
         <Route path="/hoy" element={<Hoy />} />
         <Route path="/crear" element={<Crear />} />
-        <Route path="/actividad/:id" element={<ActividadDetalle />} />
+
+        {/* ✅ Actividad con rutas hijas (subtareas) */}
+        <Route path="/actividad/:id" element={<ActividadDetalle />}>
+          <Route path="subtareas/:subId" element={<SubtareaDetalle />} />
+        </Route>
+
         <Route path="/progreso" element={<Progreso />} />
         <Route path="/actividades" element={<Actividades />} />
         <Route path="/conexion" element={<Conexion />} />
