@@ -168,3 +168,48 @@ h2 {
   gap: 12px;
   flex-wrap: wrap;
 }
+
+/* Portada */
+.splash {
+  min-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 24px 16px;
+}
+
+.splash-title {
+  margin: 0;
+  font-size: 100px;
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  color: #2563eb; /* azul principal */
+}
+
+.splash-btn {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  background: #2563eb; /* azul principal */
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.18);
+}
+
+.splash-btn:hover {
+  opacity: 0.92;
+}
+
+.splash-btn:active {
+  transform: translateY(1px);
+}
+
+.splash-arrow {
+  color: white;
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 800;
+}
