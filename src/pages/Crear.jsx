@@ -8,10 +8,13 @@ export default function Crear() {
 
   function onSubmit(e) {
     e.preventDefault();
-    // Sprint 0: solo simulamos
     alert(
       `Crear actividad\nTítulo: ${titulo}\nFecha: ${fecha}\nDuración: ${duracionMin} min`
     );
+
+    setTitulo("");
+    setFecha("");
+    setDuracionMin(30);
   }
 
   return (
@@ -46,6 +49,7 @@ export default function Crear() {
             type="number"
             min={5}
             max={600}
+            required
             value={duracionMin}
             onChange={(e) => setDuracionMin(Number(e.target.value))}
             style={{ width: "100%", padding: 8, marginTop: 6 }}
@@ -53,9 +57,8 @@ export default function Crear() {
         </label>
 
         <button type="submit" className="btn" style={{ width: "100%" }}>
-  Guardar
-</button>
-
+          Guardar
+        </button>
 
         <Link to="/hoy">← Volver a Hoy</Link>
       </form>

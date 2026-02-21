@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 
 export default function Progreso() {
-  // Mock (Sprint 0)
   const resumen = {
     total: 12,
     completadas: 5,
