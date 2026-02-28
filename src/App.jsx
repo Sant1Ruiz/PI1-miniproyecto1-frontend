@@ -8,6 +8,7 @@ import ActividadDetalle from "./pages/ActividadDetalle.jsx";
 import Progreso from "./pages/Progreso.jsx";
 import Actividades from "./pages/Actividades.jsx";
 import Conexion from "./pages/Conexion.jsx";
+import NotFound from "./pages/NotFound.jsx";
 
 export default function App() {
   const location = useLocation();
@@ -40,7 +41,7 @@ export default function App() {
         <Route path="/actividades" element={<Actividades />} />
         <Route path="/conexion" element={<Conexion />} />
 
-        <Route path="*" element={<h1>404 - No existe esa ruta</h1>} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </div>
   );
