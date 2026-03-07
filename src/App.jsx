@@ -11,7 +11,8 @@ import Progreso from "./pages/Progreso.jsx";
 import Actividades from "./pages/Actividades.jsx";
 import Conexion from "./pages/Conexion.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
-
+import RedirectPublic from "./components/RedirectPublic.jsx";
+import LogoutButton from "./components/LogoutButton.jsx";
 
 export default function App() {
   const location = useLocation();
@@ -31,13 +32,20 @@ export default function App() {
             <Link to="/progreso">Progreso</Link>
             <Link to="/actividades">Actividades</Link>
             <Link to="/conexion">Conexión</Link>
+            {localStorage.getItem("token") && <LogoutButton />}
           </nav>
         </>
       )}
 
       <Routes>
-        <Route path="/register" element={<Register />} />
-        <Route path="/login" element={<Login />} />
+        <Route path="/register" 
+          element={ 
+            <RedirectPublic>
+              <Register />
+            </RedirectPublic>
+            } 
+        />
+        <Route path="/login" element={<RedirectPublic><Login /></RedirectPublic>} />
         <Route path="/" element={<Portada />} />
         <Route 
           path="/hoy" 
@@ -47,11 +55,11 @@ export default function App() {
             </ProtectedRoute>
           } 
         />
-        <Route path="/crear" element={<Crear />} />
-        <Route path="/actividad/:id" element={<ActividadDetalle />} />
-        <Route path="/progreso" element={<Progreso />} />
-        <Route path="/actividades" element={<Actividades />} />
-        <Route path="/conexion" element={<Conexion />} />
+        <Route path="/crear" element={<ProtectedRoute><Crear /></ProtectedRoute>} />
+        <Route path="/actividad/:id" element={<ProtectedRoute><ActividadDetalle /></ProtectedRoute>} />
+        <Route path="/progreso" element={<ProtectedRoute><Progreso /></ProtectedRoute>} />
+        <Route path="/actividades" element={<ProtectedRoute><Actividades /></ProtectedRoute>} />
+        <Route path="/conexion" element={<ProtectedRoute><Conexion /></ProtectedRoute>} />
 
         <Route path="*" element={<h1>404 - No existe esa ruta</h1>} />
       </Routes>

@@ -26,12 +26,18 @@ export async function loginRequest(email, password) {
 
 export async function logoutRequest(token) {
 
-  await fetch(`${API}logout/`, {
+  const res = await fetch(`${API}logout/`, {
     method: "POST",
     headers: {
       Authorization: `Token ${token}`
     }
   })
+
+  if (!res.ok) {
+    throw new Error("Error cerrando sesión")
+  }
+
+  return true
 }
 
 export async function registerRequest(payload) {

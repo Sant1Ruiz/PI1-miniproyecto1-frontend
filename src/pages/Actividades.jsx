@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { getActivities } from '../api/activities';
 import { getPriorityBadge, formatDate, getStatusBadge } from '../utils/activityUtils';
+import ActivityCard from '../components/ActivityCard';
+import Swal from 'sweetalert2';
 
 const priorityOrder = { 'urgente': 4, 'alta': 3, 'media': 2, 'baja': 1 };
 
@@ -50,6 +52,49 @@ export default function Actividades() {
     };
     loadActivities();
   }, []);
+
+  const deleteActivity = async (id, title) => {
+    const result = await Swal.fire({
+      icon: "warning",
+      title: "¿Eliminar actividad?",
+      html: `
+        <strong>${title}</strong><br><br>
+        Esta acción eliminará la actividad permanentemente
+        y no se puede deshacer.
+      `,
+      showCancelButton: true,
+      confirmButtonText: "Eliminar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#d33"
+    });
+
+    if (!result.isConfirmed) return;
+
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/activities/${id}/`, {
+        method: "DELETE"
+      });
+
+      if (!res.ok) throw new Error();
+
+      setActivities(prev => prev.filter(a => a.id !== id));
+
+      Swal.fire({
+        icon: "success",
+        title: "Actividad eliminada",
+        text: `"${title}" fue eliminada correctamente`,
+        timer: 2000,
+        showConfirmButton: false
+      });
+
+    } catch {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: "No se pudo eliminar la actividad"
+      });
+    }
+  };
 
   const filteredAndSortedActivities = useMemo(() => {
     let filtered = activities.filter((activity) => {
@@ -198,34 +243,7 @@ export default function Actividades() {
           ) : (
             <div className="row g-3">
               {filteredAndSortedActivities.map((activity) => (
-                <div key={activity.id} className="col-12">
-                  <div className="card">
-                    <div className="card-body">
-                      <div className="d-flex justify-content-between align-items-start">
-                        <div>
-                          <Link to={`/actividad/${activity.id}`} className="text-decoration-none">
-                            <h5 className="card-title">{activity.title}</h5>
-                          </Link>
-                          <p className="card-text text-muted">{activity.description}</p>
-                          <div className="d-flex gap-2 align-items-center">
-                            <span className={`badge bg-${getPriorityBadge(activity.priority_display)}`}>
-                              {activity.priority_display}
-                            </span>
-                            <span className={`badge bg-${getStatusBadge(activity.status_display)}`}>
-                              {activity.status_display}
-                            </span>
-                            <small className="text-muted">
-                              <i className="bi bi-calendar"></i> {formatDate(activity.due_date)}
-                            </small>
-                            <small className="text-muted">
-                              <i className="bi bi-clock"></i> {activity.duracionMin} min
-                            </small>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <ActivityCard key={activity.id} activity={activity} deleteActivity={deleteActivity} getPriorityBadge={getPriorityBadge} formatDate={formatDate} />
               ))}
             </div>
           )}

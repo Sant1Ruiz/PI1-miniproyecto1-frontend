@@ -1,8 +1,10 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { Link } from "react-router-dom"
 import { registerRequest, loginRequest } from "../api/auth"
 import { validateRegister } from "../utils/validators"
 import { useAuth } from "../context/AuthContext"
+import Swal from "sweetalert2"
 
 export default function Register() {
 
@@ -19,15 +21,12 @@ export default function Register() {
   const [errors, setErrors] = useState({})
   const [serverError, setServerError] = useState("")
 
-  function handleChange(e) {
-
-    const { name, value } = e.target
-
+    const handleChange = (e) => {
     setForm({
-      ...form,
-      [name]: value
-    })
-  }
+        ...form,
+        [e.target.id]: e.target.value
+    });
+    };
 
   async function handleSubmit(e) {
 
@@ -45,79 +44,123 @@ export default function Register() {
         await registerRequest({
             name: form.name,
             email: form.email,
-            password: form.password
+            password: form.password,
+            confirm_password: form.confirmPassword
         })
         const loginData = await loginRequest(form.email, form.password)
 
-        alert("Usuario creado correctamente")
+        await Swal.fire({
+            icon: "success",
+            title: "Cuenta creada",
+            text: "Tu usuario fue creado correctamente"
+        })
         login(loginData.token, loginData.user.email)
         localStorage.setItem("token", loginData.token)
         navigate("/hoy")
 
-    } catch (err) {
+    }catch (err) {
 
-      if (err.email) {
-        setErrors({ email: "Este email ya está registrado" })
-      } else {
-        setServerError("Error creando usuario")
-        console.error("Registration error: ", err)
-      }
+        console.error("Registration error:", err)
 
+        if (err?.errors) {
+            console.error(err.errors)
+            const backendErrors = {}
+
+            Object.keys(err.errors).forEach((field) => {
+            backendErrors[field] = err.errors[field][1]
+            })
+
+            setServerError(backendErrors[0])
+            console.log("Backend validation errors1:", backendErrors)
+        } else if (err?.error?.errors) {
+            console.error(err?.error?.errors)
+            const backendErrors = {}
+
+            Object.keys(err.error.errors).forEach((field) => {
+            backendErrors[field] = err.error.errors[field]["message"]
+            })
+
+            setServerError(backendErrors[0])
+            console.log("Backend validation errors2:", backendErrors[0])    
+
+        } else {
+            setServerError("Ocurrió un error inesperado")
+        }
     }
 
   }
 
   return (
-    <div className="container mt-5" style={{ maxWidth: "400px" }}>
+    <div className="container mt-5 border border-secundary-subtle rounded p-4" style={{ maxWidth: "400px" }}>
 
       <h3 className="mb-4 text-center">Registro</h3>
 
       <form onSubmit={handleSubmit}>
 
         <div className="mb-3">
-          <label>Nombre</label>
-          <input
-            className="form-control"
-            name="name"
-            value={form.name}
-            onChange={handleChange}
-          />
+          <label className="fw-bold" htmlFor="name">Nombre</label>
+          <div className="mb-3 position-relative">
+            <i className="bi bi-person input-icon"></i>
+                <input 
+                id="name"
+                type="text" 
+                className="form-control ps-5" 
+                placeholder="Ingrese su nombre"
+                value={form.name}
+                onChange={handleChange}
+                />
+            </div>
           {errors.name && <div className="text-danger">{errors.name}</div>}
         </div>
 
         <div className="mb-3">
-          <label>Email</label>
-          <input
-            type="email"
-            className="form-control"
-            name="email"
-            value={form.email}
-            onChange={handleChange}
-          />
+          <label className="fw-bold" htmlFor="email">Email</label>
+          <div className="mb-3 position-relative">
+            <i className="bi bi-envelope input-icon"></i>
+            <input
+                id="email"
+                type="email"
+                className="form-control ps-5"
+                placeholder="Ingrese su email"
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+            />
+          </div>
           {errors.email && <div className="text-danger">{errors.email}</div>}
         </div>
 
         <div className="mb-3">
-          <label>Contraseña</label>
-          <input
-            type="password"
-            className="form-control"
-            name="password"
-            value={form.password}
-            onChange={handleChange}
-          />
+          <label className="fw-bold" htmlFor="password">Contraseña</label>
+            <div className="mb-3 position-relative">
+            <i className="bi bi-lock input-icon"></i>
+            <input
+                id="password"
+                type="password"
+                className="form-control ps-5"
+                placeholder="Ingrese su contraseña"
+                name="password"
+                value={form.password}
+                onChange={handleChange}
+            />
+        </div>
           {errors.password && <div className="text-danger">{errors.password}</div>}
         </div>
 
         <div className="mb-3">
-          <label>Confirmar contraseña</label>
+          <label className="fw-bold" htmlFor="confirmPassword">Confirmar contraseña</label>
+            <div className="mb-3 position-relative">
+            <i className="bi bi-lock input-icon"></i>
           <input
+            id="confirmPassword"
             type="password"
-            className="form-control"
+            className="form-control ps-5"
+            placeholder="Ingrese su contraseña nuevamente"
             name="confirmPassword"
             value={form.confirmPassword}
             onChange={handleChange}
           />
+        </div>
           {errors.confirmPassword && (
             <div className="text-danger">{errors.confirmPassword}</div>
           )}
@@ -130,13 +173,17 @@ export default function Register() {
         )}
 
         <button 
-            className="btn btn-dark w-100" 
+            className="btn btn-primary w-100" 
             type="submit"
         >
           Crear cuenta
         </button>
 
       </form>
+      <div className="text-center mt-3 small">
+        <span className="text-muted">Ya tienes una cuenta?</span>
+        <Link to="/login" className="text-primary ms-2 text-decoration-none">Inicia sesión aquí</Link>
+      </div>
 
     </div>
   )

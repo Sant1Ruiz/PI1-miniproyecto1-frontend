@@ -32,7 +32,7 @@ export async function createActivity(payload) {
 export async function getSubtasks(id) {
   const res = await fetch(`${API_URL}${id}/subtasks/`,{
     headers: {
-      Authorization: `Token ${token}`
+      "Authorization": `Token ${token}`
     }
   })
   const data = await res.json()
@@ -40,7 +40,6 @@ export async function getSubtasks(id) {
 }
 
 export async function deleteActivity(id) {
-
   const res = await fetch(`${API_URL}${id}/`, {
     method: "DELETE",
     headers: {
@@ -88,6 +87,24 @@ export async function toggleCompleteActivity(activity) {
 
   if (!res.ok) {
     throw new Error("Error cambiando estado")
+  }
+
+  const data = await res.json()
+  return data.data ?? data
+}
+
+export async function updateActivity(id, payload) {
+  const res = await fetch(`${API_URL}${id}/`, {
+    method: "PATCH",
+    headers: {
+      "Authorization" : `Token ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  })
+
+  if (!res.ok) {
+    throw new Error("No se pudo actualizar la actividad")
   }
 
   const data = await res.json()

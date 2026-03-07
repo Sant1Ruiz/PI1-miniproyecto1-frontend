@@ -7,6 +7,7 @@ import {
   deleteActivity,
   toggleCompleteActivity,
   createActivity,
+  updateActivity,
 } from "../api/activities";
 import Swal from "sweetalert2";
 
@@ -19,13 +20,21 @@ export default function ActividadDetalle() {
   const [successMessage, setSuccessMessage] = useState(null);
   const [highlightedSubtaskId, setHighlightedSubtaskId] = useState(null);
 
-  // Form states
+  // Form states for subtasks
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newMinutos, setNewMinutos] = useState('');
   const [creating, setCreating] = useState(false);
   const [validationError, setValidationError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({ title: '', description: '', minutos: '' });
+
+  // Edit states for main activity
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editPriority, setEditPriority] = useState('');
+  const [editEstimatedMinutes, setEditEstimatedMinutes] = useState('');
 
   const loadData = useCallback(async () => {
     // Hide any open modals to prevent backdrop issues
@@ -41,6 +50,12 @@ export default function ActividadDetalle() {
       const subs = await getSubtasks(id);
       setActividad(act);
       setSubtasks(subs);
+      // Initialize edit states
+      setEditTitle(act.title || '');
+      setEditDescription(act.description || '');
+      setEditDueDate(act.due_date || '');
+      setEditPriority(act.priority_display || '');
+      setEditEstimatedMinutes(act.duracionMin || '');
       setError(null);
     } catch (err) {
       console.error(err);
@@ -134,6 +149,41 @@ export default function ActividadDetalle() {
     }
   };
 
+  const handleEdit = () => {
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    // Reset to original values
+    setEditTitle(actividad.title || '');
+    setEditDescription(actividad.description || '');
+    setEditDueDate(actividad.due_date || '');
+    setEditPriority(actividad.priority_display || '');
+    setEditEstimatedMinutes(actividad.duracionMin || '');
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      const payload = {
+        title: editTitle,
+        description: editDescription,
+        due_date: editDueDate,
+        priority_display: editPriority,
+        duracionMin: Number(editEstimatedMinutes),
+      };
+      const updated = await updateActivity(id, payload);
+      setActividad(updated);
+      setIsEditing(false);
+      setSuccessMessage('Actividad actualizada correctamente');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error(err);
+      setError('Error al actualizar actividad');
+      setTimeout(() => setError(null), 4000);
+    }
+  };
+
   const handleToggle = async (subtask) => {
     try {
       const updated = await toggleCompleteActivity(subtask);
@@ -217,21 +267,92 @@ export default function ActividadDetalle() {
         <Link to="/hoy" className="me-2 text-dark">
           <i className="bi bi-chevron-left"></i>
         </Link>
-        <h3 className="m-0 flex-grow-1">{actividad.title}</h3>
+        {isEditing ? (
+          <input
+            type="text"
+            className="form-control me-2"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            placeholder="Título"
+          />
+        ) : (
+          <h3 className="m-0 flex-grow-1">{actividad.title}</h3>
+        )}
         <button
           className={`btn btn-sm me-2 ${actividad.status_id === 3 ? 'btn-success' : 'btn-outline-dark'}`}
           onClick={handleCompleteTask}
+          disabled={isEditing}
         >
           <i className="bi bi-patch-check me-2"></i>
           {actividad.status_id === 3 ? 'Completada' : 'Completar'}
         </button>
-        <button className="btn btn-outline-dark btn-sm" onClick={loadData}>
+        {isEditing ? (
+          <>
+            <button className="btn btn-success btn-sm me-2" onClick={handleSaveEdit}>
+              <i className="bi bi-check"></i> Guardar
+            </button>
+            <button className="btn btn-secondary btn-sm me-2" onClick={handleCancelEdit}>
+              <i className="bi bi-x"></i> Cancelar
+            </button>
+          </>
+        ) : (
+          <button className="btn btn-outline-primary btn-sm me-2" onClick={handleEdit}>
+            <i className="bi bi-pencil"></i> Editar
+          </button>
+        )}
+        <button className="btn btn-outline-dark btn-sm" onClick={loadData} disabled={isEditing}>
           <i className="bi bi-arrow-repeat"></i>
         </button>
       </div>
-      <p className="text-muted">
-        {actividad.description || <i className="text-muted">Sin descripción</i>}
-      </p>
+      {isEditing ? (
+        <div className="mb-3">
+          <textarea
+            className="form-control mb-2"
+            value={editDescription}
+            onChange={(e) => setEditDescription(e.target.value)}
+            placeholder="Descripción"
+            rows="3"
+          />
+          <div className="row g-2">
+            <div className="col-md-3">
+              <label className="form-label">Fecha límite</label>
+              <input
+                type="date"
+                className="form-control"
+                value={editDueDate}
+                onChange={(e) => setEditDueDate(e.target.value)}
+              />
+            </div>
+            <div className="col-md-3">
+              <label className="form-label">Prioridad</label>
+              <select
+                className="form-select"
+                value={editPriority}
+                onChange={(e) => setEditPriority(e.target.value)}
+              >
+                <option value="baja">Baja</option>
+                <option value="media">Media</option>
+                <option value="alta">Alta</option>
+                <option value="urgente">Urgente</option>
+              </select>
+            </div>
+            <div className="col-md-3">
+              <label className="form-label">Minutos estimados</label>
+              <input
+                type="number"
+                className="form-control"
+                value={editEstimatedMinutes}
+                onChange={(e) => setEditEstimatedMinutes(e.target.value)}
+                min="1"
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <p className="text-muted">
+          {actividad.description || <i className="text-muted">Sin descripción</i>}
+        </p>
+      )}
 
       {/* Alerts */}
       {error && (
@@ -353,8 +474,7 @@ export default function ActividadDetalle() {
                     disabled={creating}
                   />
                   {fieldErrors.title && (
-                    <div className="invalid-feedback d-block bg-danger-subtle rounded p-2">
-                      <i className="bi bi-info-circle me-2"></i>
+                    <div className="invalid-feedback" style={{ display: 'block' }}>
                       {fieldErrors.title}
                     </div>
                   )}
@@ -373,8 +493,7 @@ export default function ActividadDetalle() {
                     rows={3}
                   />
                   {fieldErrors.description && (
-                    <div className="invalid-feedback d-block bg-danger-subtle rounded p-2">
-                      <i className="bi bi-info-circle me-2"></i>
+                    <div className="invalid-feedback" style={{ display: 'block' }}>
                       {fieldErrors.description}
                     </div>
                   )}
@@ -395,8 +514,7 @@ export default function ActividadDetalle() {
                     min="0"
                   />
                   {fieldErrors.minutos && (
-                    <div className="invalid-feedback d-block bg-danger-subtle rounded p-2">
-                      <i className="bi bi-info-circle me-2"></i>
+                    <div className="invalid-feedback" style={{ display: 'block' }}>
                       {fieldErrors.minutos}
                     </div>
                   )}

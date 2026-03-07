@@ -1,5 +1,4 @@
-import ActivityCard from "./ActivityCard";
-
+import ActivityCard from "../components/ActivityCard";
 export default function ActivityColumn({
   title,
   subtitle,
