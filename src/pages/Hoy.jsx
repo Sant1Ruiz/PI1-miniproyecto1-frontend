@@ -1,54 +1,129 @@
 import { Link } from "react-router-dom";
-import { ACTIVIDADES_DEMO } from "../data/actividadesDemo";
+import { useEffect, useState } from "react";
+import { getActivities } from "../api/activities";
+import ActivityColumn from "../components/ActivityColumn";
+import { getPriorityBadge, formatDate } from "../utils/activityUtils";
+import Swal from "sweetalert2";
 
 export default function Hoy() {
-  const HOY = new Date().toISOString().slice(0, 10);
-  const actividades = ACTIVIDADES_DEMO;
+  const [activities, setActivities] = useState([]);
+  const today = new Date().toISOString().split("T")[0];
+  
+  useEffect(() => {
+    getActivities()
+      .then(data => {
+        setActivities(data);
+      })
+      .catch(err => console.error(err));
+  }, []);
 
-  const paraHoy = actividades.filter((a) => a.fecha === HOY);
+  const paraHoy = activities.filter(
+    (a) => a.due_date?.split("T")[0] === today
+  );
 
-  const proximas = actividades
-    .filter((a) => a.fecha > HOY)
-    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const proximas = activities
+    .filter((a) => a.due_date?.split("T")[0] > today)
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
+
+  const vencidas = activities
+    .filter((a) => a.due_date?.split("T")[0] < today)
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
+
+  async function deleteActivity(id, title) {
+
+  const result = await Swal.fire({
+    icon: "warning",
+    title: "¿Eliminar actividad?",
+    html: `
+      <strong>${title}</strong><br><br>
+      Esta acción eliminará la actividad permanentemente
+      y no se puede deshacer.
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Eliminar",
+    cancelButtonText: "Cancelar",
+    confirmButtonColor: "#d33"
+  })
+
+  if (!result.isConfirmed) return
+
+  try {
+
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/activities/${id}/`, {
+      method: "DELETE"
+    })
+
+    if(!res.ok) throw new Error()
+
+      setActivities(prev => prev.filter(a => a.id !== id))
+
+      Swal.fire({
+        icon: "success",
+        title: "Actividad eliminada",
+        text: `"${title}" fue eliminada correctamente`,
+        timer: 2000,
+        showConfirmButton: false
+      })
+
+  } catch {
+
+    Swal.fire({
+      icon: "error",
+      title: "Error",
+      text: "No se pudo eliminar la actividad"
+    })
+
+  }
+}
 
   return (
     <div>
-      <h1>Hoy</h1>
+      <div className="header-page row">
+        <div className="col">
+          <h2>Actividades</h2>
+          <p className="text-muted">Estas son las actividades que tienes programadas</p>
+        </div>
+        <div className="col-auto">
+          <Link to="/crear" className="btn btn-dark text-decoration-none">+ Crear actividad</Link>
+        </div>
+      </div>
+      
+      <div className="row">
+        <ActivityColumn
+            title="Para hoy"
+            subtitle="actividades"
+            activities={paraHoy}
+            emptyText="No tienes actividades para hoy."
+            bg="bg-primary-subtle"
+            border="border-primary-subtle"
+            deleteActivity={deleteActivity}
+            getPriorityBadge={getPriorityBadge}
+            formatDate={formatDate}
+          />
 
-      <section className="card">
-        <h2>Para hoy</h2>
-        {paraHoy.length === 0 ? (
-          <p className="muted">No tienes actividades para hoy.</p>
-        ) : (
-          <ul className="list">
-            {paraHoy.map((a) => (
-              <li key={a.id} className="item">
-                <Link to={`/actividad/${a.id}`}>{a.titulo}</Link>
-                <span className="badge">{a.fecha}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          <ActivityColumn
+            title="Próximas"
+            subtitle="actividades"
+            activities={proximas}
+            emptyText="No hay próximas actividades."
+            bg="bg-success-subtle"
+            border="border-success-subtle"
+            deleteActivity={deleteActivity}
+            getPriorityBadge={getPriorityBadge}
+            formatDate={formatDate}
+          />
 
-      <section className="card">
-        <h2>Próximas</h2>
-        {proximas.length === 0 ? (
-          <p className="muted">No hay próximas actividades.</p>
-        ) : (
-          <ul className="list">
-            {proximas.map((a) => (
-              <li key={a.id} className="item">
-                <Link to={`/actividad/${a.id}`}>{a.titulo}</Link>
-                <span className="badge">{a.fecha}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <div style={{ marginTop: 12 }}>
-        <Link to="/crear">+ Crear actividad</Link>
+          <ActivityColumn
+            title="Vencidas"
+            subtitle="actividades"
+            activities={vencidas}
+            emptyText="No hay actividades vencidas."
+            bg="bg-danger-subtle"
+            border="border-danger-subtle"
+            deleteActivity={deleteActivity}
+            getPriorityBadge={getPriorityBadge}
+            formatDate={formatDate}
+          />
       </div>
     </div>
   );

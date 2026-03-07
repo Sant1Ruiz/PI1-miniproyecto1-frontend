@@ -1,6 +1,7 @@
 import { Routes, Route, Link } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 
+
 import Portada from "./pages/Portada.jsx";
 import Hoy from "./pages/Hoy.jsx";
 import Crear from "./pages/Crear.jsx";
@@ -14,7 +15,7 @@ export default function App() {
   const enPortada = location.pathname === "/";
 
   return (
-    <div style={{ padding: 16 }}>
+    <div className="container">
       {!enPortada && (
         <>
           <div className="app-header">
