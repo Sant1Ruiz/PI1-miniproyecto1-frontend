@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
-import { apiGet } from "../api/client";
+import { apiGet, apiPost } from "../api/client";
 
 export default function Conexion() {
   const [estado, setEstado] = useState("cargando"); // cargando | conectado | error
   const [info, setInfo] = useState(null);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // NUEVO: diagnóstico de POST
+  const [diag, setDiag] = useState(null);
 
   async function probarConexion() {
     setEstado("cargando");
@@ -17,8 +20,18 @@ export default function Conexion() {
         apiGet("/api/users/"),
       ]);
 
-      const activities = Array.isArray(activitiesResp?.data) ? activitiesResp.data : [];
-      const users = Array.isArray(usersResp?.data) ? usersResp.data : [];
+      // OJO: tu back a veces puede devolver lista directa.
+      const activities = Array.isArray(activitiesResp?.data)
+        ? activitiesResp.data
+        : Array.isArray(activitiesResp)
+        ? activitiesResp
+        : [];
+
+      const users = Array.isArray(usersResp?.data)
+        ? usersResp.data
+        : Array.isArray(usersResp)
+        ? usersResp
+        : [];
 
       setInfo({
         baseUrl: import.meta.env.VITE_API_URL,
@@ -32,15 +45,31 @@ export default function Conexion() {
     } catch (e) {
       console.log("Error de conexión:", e);
       setEstado("error");
-      setErrorMsg("No se pudo conectar al backend");
+      setErrorMsg(e?.message ?? "No se pudo conectar al backend");
     }
   }
 
-  // auto-probar al entrar
-useEffect(() => {
-  const t = setTimeout(() => probarConexion(), 0);
-  return () => clearTimeout(t);
-}, []);
+  // NUEVO: POST de diagnóstico (payload vacío, no crea nada)
+  async function diagnosticoPost(endpoint) {
+    setDiag({ endpoint, running: true });
+
+    try {
+      const resp = await apiPost(endpoint, {}); // payload vacío a propósito
+      setDiag({ endpoint, running: false, ok: true, resp });
+    } catch (e) {
+      setDiag({
+        endpoint,
+        running: false,
+        ok: false,
+        error: e?.message ?? String(e),
+      });
+    }
+  }
+
+  useEffect(() => {
+    const t = setTimeout(() => probarConexion(), 0);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <div>
@@ -51,9 +80,17 @@ useEffect(() => {
         {estado === "error" && `Error ❌ ${errorMsg}`}
       </p>
 
-      <div className="btn-row" style={{ marginBottom: 12 }}>
+      <div className="btn-row" style={{ marginBottom: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button className="btn" onClick={probarConexion}>
           Probar de nuevo
+        </button>
+
+        {/* NUEVOS */}
+        <button className="btn" onClick={() => diagnosticoPost("/api/activities/")}>
+          POST diagnóstico Activities
+        </button>
+        <button className="btn" onClick={() => diagnosticoPost("/api/users/")}>
+          POST diagnóstico Users
         </button>
       </div>
 
@@ -75,14 +112,18 @@ useEffect(() => {
         </ul>
       </section>
 
+      {/* NUEVO */}
+      <section className="card">
+        <h2>Diagnóstico POST</h2>
+        <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+{JSON.stringify(diag, null, 2)}
+        </pre>
+      </section>
+
       <section className="card">
         <h2>Meta</h2>
         <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-{JSON.stringify(
-  { activities: info?.metaActivities, users: info?.metaUsers },
-  null,
-  2
-)}
+{JSON.stringify({ activities: info?.metaActivities, users: info?.metaUsers }, null, 2)}
         </pre>
       </section>
     </div>

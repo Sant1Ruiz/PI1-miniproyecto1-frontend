@@ -61,7 +61,7 @@ export default function App() {
         <Route path="/actividades" element={<ProtectedRoute><Actividades /></ProtectedRoute>} />
         <Route path="/conexion" element={<ProtectedRoute><Conexion /></ProtectedRoute>} />
 
-        <Route path="*" element={<h1>404 - No existe esa ruta</h1>} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </div>
   );

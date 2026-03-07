@@ -392,5 +392,7 @@ export default function Actividades() {
         </div>
       </div>
     </div>
+    
   );
+  
 }
