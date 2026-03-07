@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { getActivities, deleteActivity } from "../api/activities";
+import { getActivities } from "../api/activities";
 import ActivityColumn from "../components/ActivityColumn";
 import { getPriorityBadge, formatDate } from "../utils/activityUtils";
 import Swal from "sweetalert2";
@@ -17,19 +17,19 @@ export default function Hoy() {
       .catch(err => console.error(err));
   }, []);
 
-  const paraHoy = activities.filter(
-    (a) => a.due_date?.split("T")[0] === today
-  );
+  const paraHoy = activities
+    .filter((a) => a.due_date?.split("T")[0] === today)
+    .sort((a, b) => a.duracionMin - b.duracionMin);
 
   const proximas = activities
     .filter((a) => a.due_date?.split("T")[0] > today)
-    .sort((a, b) => a.due_date.localeCompare(b.due_date));
+    .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.duracionMin - b.duracionMin);
 
   const vencidas = activities
     .filter((a) => a.due_date?.split("T")[0] < today)
-    .sort((a, b) => a.due_date.localeCompare(b.due_date));
+    .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.duracionMin - b.duracionMin);
 
-  async function handleDeleteActivity(id, title) {
+  async function deleteActivity(id, title) {
 
   const result = await Swal.fire({
     icon: "warning",
@@ -49,9 +49,14 @@ export default function Hoy() {
 
   try {
 
-    const res = deleteActivity(id)
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/activities/${id}/`, {
+      method: "DELETE",
+      headers: {
+        "Authorization": `Token ${localStorage.getItem("token")}`
+      }
+    })
 
-    if(!res.success) throw new Error()
+    if(!res.ok) throw new Error()
 
       setActivities(prev => prev.filter(a => a.id !== id))
 
@@ -78,7 +83,7 @@ export default function Hoy() {
     <div>
       <div className="header-page row">
         <div className="col">
-          <h2>Actividades</h2>
+          <h2>Actividades de Hoy</h2>
           <p className="text-muted">Estas son las actividades que tienes programadas</p>
         </div>
         <div className="col-auto">
@@ -91,22 +96,30 @@ export default function Hoy() {
             title="Vencidas"
             subtitle="actividades"
             activities={vencidas}
-            emptyText="No hay actividades vencidas."
+            emptyText={
+              <div className="text-center">
+                <p>No hay actividades vencidas.</p>
+              </div>
+            }
             bg="bg-danger-subtle"
             border="border-danger-subtle"
-            deleteActivity={handleDeleteActivity}
+            deleteActivity={deleteActivity}
             getPriorityBadge={getPriorityBadge}
             formatDate={formatDate}
           />
-          
-        <ActivityColumn
-            title="Para hoy"
+
+          <ActivityColumn
+            title="Hoy"
             subtitle="actividades"
             activities={paraHoy}
-            emptyText="No tienes actividades para hoy."
+            emptyText={
+              <div className="text-center">
+                <p>No hay actividades para hoy.</p>
+              </div>
+            }
             bg="bg-primary-subtle"
             border="border-primary-subtle"
-            deleteActivity={handleDeleteActivity}
+            deleteActivity={deleteActivity}
             getPriorityBadge={getPriorityBadge}
             formatDate={formatDate}
           />
@@ -115,15 +128,27 @@ export default function Hoy() {
             title="Próximas"
             subtitle="actividades"
             activities={proximas}
-            emptyText="No hay próximas actividades."
+            emptyText={
+              <div className="text-center">
+                <p>No hay próximas actividades.</p>
+              </div>
+            }
             bg="bg-success-subtle"
             border="border-success-subtle"
-            deleteActivity={handleDeleteActivity}
+            deleteActivity={deleteActivity}
             getPriorityBadge={getPriorityBadge}
             formatDate={formatDate}
           />
+      </div>
 
-          
+      <div className="text-center mt-4">
+        <span>¿Cómo se organiza esto?</span>
+        <i 
+          className="bi bi-info-circle text-muted ms-2" 
+          data-bs-toggle="tooltip" 
+          data-bs-placement="top" 
+          title="Las actividades se organizan primero por fecha (más antiguas arriba), luego por tiempo estimado (menor tiempo primero)."
+        ></i>
       </div>
     </div>
   );

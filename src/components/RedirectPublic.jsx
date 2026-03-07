@@ -6,7 +6,7 @@ export default function RedirectPublic({ children }) {
   const { token } = useAuth()
 
   if (token) {
-    return <Navigate to="/" />
+    return <Navigate to="/hoy" />
   }
 
   return children
