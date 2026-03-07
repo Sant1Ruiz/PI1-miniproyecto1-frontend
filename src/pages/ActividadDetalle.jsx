@@ -106,7 +106,7 @@ export default function ActividadDetalle() {
         description: newDescription,
         priority: actividad.priority, // inherit from parent
         due_date: actividad.due_date, // inherit from parent
-        estimated_minutes: Number(newMinutos),
+        duration: Number(newMinutos),
         user: user.id,
         parent: actividad.id // define as subtask
       };
@@ -434,9 +434,9 @@ export default function ActividadDetalle() {
                 {sub.description && (
                   <small className="text-muted ms-2">{sub.description}</small>
                 )}
-                {sub.estimated_minutes && (
+                {sub.duration && (
                   <span className="badge bg-secondary ms-2">
-                    ⏱️ {sub.estimated_minutes}min
+                    ⏱️ {sub.duration}min
                   </span>
                 )}
               </div>
