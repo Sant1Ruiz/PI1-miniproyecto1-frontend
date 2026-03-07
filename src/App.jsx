@@ -1,7 +1,8 @@
 import { Routes, Route, Link } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 
-
+import Register from "./pages/Register.jsx"
+import Login from "./pages/Login.jsx";
 import Portada from "./pages/Portada.jsx";
 import Hoy from "./pages/Hoy.jsx";
 import Crear from "./pages/Crear.jsx";
@@ -9,6 +10,8 @@ import ActividadDetalle from "./pages/ActividadDetalle.jsx";
 import Progreso from "./pages/Progreso.jsx";
 import Actividades from "./pages/Actividades.jsx";
 import Conexion from "./pages/Conexion.jsx";
+import ProtectedRoute from "./components/ProtectedRoute.jsx";
+
 
 export default function App() {
   const location = useLocation();
@@ -33,8 +36,17 @@ export default function App() {
       )}
 
       <Routes>
+        <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/" element={<Portada />} />
-        <Route path="/hoy" element={<Hoy />} />
+        <Route 
+          path="/hoy" 
+          element={
+            <ProtectedRoute>
+              <Hoy />
+            </ProtectedRoute>
+          } 
+        />
         <Route path="/crear" element={<Crear />} />
         <Route path="/actividad/:id" element={<ActividadDetalle />} />
         <Route path="/progreso" element={<Progreso />} />

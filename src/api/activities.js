@@ -1,38 +1,67 @@
 import { apiGet, apiPost, unwrap } from "./client";
+import { getToken } from "../api/auth";
+
 const BASE_URL = import.meta.env.VITE_API_URL;
 
 const API_URL = `${BASE_URL}/api/activities/`;
+const token = localStorage.getItem("token")
 
 export async function getActivities() {
-  const resp = await apiGet("/api/activities/");
-  return unwrap(resp) ?? [];
+   const resp = await fetch(`${API_URL}`, {
+    headers: {
+      "Authorization": `Token ${token}`
+    }
+  })
+  const data = await resp.json()
+  return data.data ?? data
 }
 
 export async function createActivity(payload) {
-  const resp = await apiPost("/api/activities/", payload);
-  return unwrap(resp);
+  const res = await fetch(`${API_URL}`,{
+    method: "POST",
+    headers: {
+      "Authorization": `Token ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  })
+  const data = await res.json()
+  return data.data ?? data
 }
 
 export async function getSubtasks(id) {
-  const res = await fetch(`${API_URL}${id}/subtasks/`)
+  const res = await fetch(`${API_URL}${id}/subtasks/`,{
+    headers: {
+      Authorization: `Token ${token}`
+    }
+  })
   const data = await res.json()
   return data.data ?? data
 }
 
 export async function deleteActivity(id) {
-  const res = await fetch(`${API_URL}${id}/subtasks/`, {
-    method: "DELETE"
+
+  const res = await fetch(`${API_URL}${id}/`, {
+    method: "DELETE",
+    headers: {
+      "Authorization": `Token ${token}`
+    }
   })
 
   if (!res.ok) {
     throw new Error("Error eliminando actividad")
   }
 
-  return true
+  return res
 }
 
 export async function getActivity(id) {
-  const res = await fetch(`${API_URL}${id}/`)
+
+  const res = await fetch(`${API_URL}${id}/`, {
+    headers: {
+      "Authorization": `Token ${token}`
+    }
+  })
 
   if (!res.ok) {
     throw new Error("No se pudo obtener la actividad")
@@ -49,6 +78,7 @@ export async function toggleCompleteActivity(activity) {
   const res = await fetch(`${API_URL}${activity.id}/`, {
     method: "PATCH",
     headers: {
+      "Authorization": `Token ${token}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
@@ -58,23 +88,6 @@ export async function toggleCompleteActivity(activity) {
 
   if (!res.ok) {
     throw new Error("Error cambiando estado")
-  }
-
-  const data = await res.json()
-  return data.data ?? data
-}
-
-export async function createSubActivity(payload) {
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  })
-
-  if (!res.ok) {
-    throw new Error("No se pudo crear la subtarea")
   }
 
   const data = await res.json()

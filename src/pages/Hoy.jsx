@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { getActivities } from "../api/activities";
+import { getActivities, deleteActivity } from "../api/activities";
 import ActivityColumn from "../components/ActivityColumn";
 import { getPriorityBadge, formatDate } from "../utils/activityUtils";
 import Swal from "sweetalert2";
@@ -29,7 +29,7 @@ export default function Hoy() {
     .filter((a) => a.due_date?.split("T")[0] < today)
     .sort((a, b) => a.due_date.localeCompare(b.due_date));
 
-  async function deleteActivity(id, title) {
+  async function handleDeleteActivity(id, title) {
 
   const result = await Swal.fire({
     icon: "warning",
@@ -49,11 +49,9 @@ export default function Hoy() {
 
   try {
 
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/activities/${id}/`, {
-      method: "DELETE"
-    })
+    const res = deleteActivity(id)
 
-    if(!res.ok) throw new Error()
+    if(!res.success) throw new Error()
 
       setActivities(prev => prev.filter(a => a.id !== id))
 
@@ -84,7 +82,7 @@ export default function Hoy() {
           <p className="text-muted">Estas son las actividades que tienes programadas</p>
         </div>
         <div className="col-auto">
-          <Link to="/crear" className="btn btn-dark text-decoration-none">+ Crear actividad</Link>
+          <Link to="/crear" className="btn btn-primary text-decoration-none">+ Crear actividad</Link>
         </div>
       </div>
       
@@ -96,7 +94,7 @@ export default function Hoy() {
             emptyText="No tienes actividades para hoy."
             bg="bg-primary-subtle"
             border="border-primary-subtle"
-            deleteActivity={deleteActivity}
+            deleteActivity={handleDeleteActivity}
             getPriorityBadge={getPriorityBadge}
             formatDate={formatDate}
           />
@@ -108,7 +106,7 @@ export default function Hoy() {
             emptyText="No hay próximas actividades."
             bg="bg-success-subtle"
             border="border-success-subtle"
-            deleteActivity={deleteActivity}
+            deleteActivity={handleDeleteActivity}
             getPriorityBadge={getPriorityBadge}
             formatDate={formatDate}
           />
@@ -120,7 +118,7 @@ export default function Hoy() {
             emptyText="No hay actividades vencidas."
             bg="bg-danger-subtle"
             border="border-danger-subtle"
-            deleteActivity={deleteActivity}
+            deleteActivity={handleDeleteActivity}
             getPriorityBadge={getPriorityBadge}
             formatDate={formatDate}
           />
