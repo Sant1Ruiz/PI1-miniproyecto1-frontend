@@ -16,16 +16,18 @@ export default function Hoy() {
       })
       .catch(err => console.error(err));
   }, []);
+  
+  const mainActivities = activities.filter((a) => a.parent === null);
 
-  const paraHoy = activities
+  const paraHoy = mainActivities
     .filter((a) => a.due_date?.split("T")[0] === today)
     .sort((a, b) => a.duracionMin - b.duracionMin);
 
-  const proximas = activities
+  const proximas = mainActivities
     .filter((a) => a.due_date?.split("T")[0] > today)
     .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.duracionMin - b.duracionMin);
 
-  const vencidas = activities
+  const vencidas = mainActivities
     .filter((a) => a.due_date?.split("T")[0] < today)
     .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.duracionMin - b.duracionMin);
 
