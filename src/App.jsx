@@ -13,7 +13,7 @@ import Conexion from "./pages/Conexion.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import RedirectPublic from "./components/RedirectPublic.jsx";
 import LogoutButton from "./components/LogoutButton.jsx";
-
+import NotFound from "./pages/NotFound.jsx";
 export default function App() {
   const location = useLocation();
   const enPortada = location.pathname === "/";
