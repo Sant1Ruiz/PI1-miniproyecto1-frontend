@@ -9,6 +9,15 @@ body {
   color: #111827;
 }
 
+.input-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6c757d;
+  font-size: 1.1rem;
+}
+
 /* Layout */
 .app {
   min-height: 100vh;

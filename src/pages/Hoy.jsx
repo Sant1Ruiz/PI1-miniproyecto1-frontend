@@ -1,117 +1,154 @@
 import { Link } from "react-router-dom";
-import { useActivities } from "../hooks/useActivities";
-
-function todayLocalISO() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function normalizeActivity(a) {
-  const parentRaw = a.parent ?? null;
-  // algunos back usan 0 como "sin padre"
-  const parent = parentRaw === 0 ? null : parentRaw;
-
-  const fechaRaw = a.due_date ?? a.created_at ?? a.updated_at ?? "";
-  const fecha = typeof fechaRaw === "string" ? fechaRaw.slice(0, 10) : "";
-
-  return {
-    id: a.id,
-    parent, // <- importante para filtrar padres
-    titulo: a.title ?? a.titulo ?? a.nombre ?? "Sin título",
-    fecha,  // <- viene de due_date
-  };
-}
+import { useEffect, useState } from "react";
+import { getActivities } from "../api/activities";
+import ActivityColumn from "../components/ActivityColumn";
+import { getPriorityBadge, formatDate } from "../utils/activityUtils";
+import Swal from "sweetalert2";
 
 export default function Hoy() {
-  const HOY = todayLocalISO();
-  const { data, status, error } = useActivities();
+  const [activities, setActivities] = useState([]);
+  const today = new Date().toISOString().split("T")[0];
+  
+  useEffect(() => {
+    getActivities()
+      .then(data => {
+        setActivities(data);
+      })
+      .catch(err => console.error(err));
+  }, []);
 
-  if (status === "loading") return <p className="muted">Cargando actividades...</p>;
-  if (status === "error") {
-  const msg = error?.message ?? "No se pudo cargar";
-  const friendly = msg.includes("Failed to fetch")
-    ? "No se pudo conectar al servidor."
-    : msg;
+  const paraHoy = activities
+    .filter((a) => a.due_date?.split("T")[0] === today)
+    .sort((a, b) => a.duracionMin - b.duracionMin);
 
-  return <p className="muted">{friendly}</p>;
+  const proximas = activities
+    .filter((a) => a.due_date?.split("T")[0] > today)
+    .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.duracionMin - b.duracionMin);
+
+  const vencidas = activities
+    .filter((a) => a.due_date?.split("T")[0] < today)
+    .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.duracionMin - b.duracionMin);
+
+  async function deleteActivity(id, title) {
+
+  const result = await Swal.fire({
+    icon: "warning",
+    title: "¿Eliminar actividad?",
+    html: `
+      <strong>${title}</strong><br><br>
+      Esta acción eliminará la actividad permanentemente
+      y no se puede deshacer.
+    `,
+    showCancelButton: true,
+    confirmButtonText: "Eliminar",
+    cancelButtonText: "Cancelar",
+    confirmButtonColor: "#d33"
+  })
+
+  if (!result.isConfirmed) return
+
+  try {
+
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/activities/${id}/`, {
+      method: "DELETE",
+      headers: {
+        "Authorization": `Token ${localStorage.getItem("token")}`
+      }
+    })
+
+    if(!res.ok) throw new Error()
+
+      setActivities(prev => prev.filter(a => a.id !== id))
+
+      Swal.fire({
+        icon: "success",
+        title: "Actividad eliminada",
+        text: `"${title}" fue eliminada correctamente`,
+        timer: 2000,
+        showConfirmButton: false
+      })
+
+  } catch {
+
+    Swal.fire({
+      icon: "error",
+      title: "Error",
+      text: "No se pudo eliminar la actividad"
+    })
+
+  }
 }
-
-  const actividades = (data ?? []).map(normalizeActivity);
-
-  // 1) Solo actividades padre
-  const padres = actividades.filter((a) => a.parent === null || a.parent === undefined);
-
-  // 2) Vencidas / Hoy / Próximas (por due_date)
-  const vencidas = padres
-    .filter((a) => a.fecha && a.fecha < HOY)
-    .sort((a, b) => b.fecha.localeCompare(a.fecha)); // más recientes vencidas primero
-
-  const paraHoy = padres
-    .filter((a) => a.fecha === HOY)
-    .sort((a, b) => a.titulo.localeCompare(b.titulo));
-
-  const proximas = padres
-    .filter((a) => a.fecha && a.fecha > HOY)
-    .sort((a, b) => a.fecha.localeCompare(b.fecha));
 
   return (
     <div>
-      <h1>Hoy</h1>
-
+      <div className="header-page row">
+        <div className="col">
+          <h2>Actividades de Hoy</h2>
+          <p className="text-muted">Estas son las actividades que tienes programadas</p>
+        </div>
+        <div className="col-auto">
+          <Link to="/crear" className="btn btn-primary text-decoration-none">+ Crear actividad</Link>
+        </div>
+      </div>
       
+      <div className="row">
+        <ActivityColumn
+            title="Vencidas"
+            subtitle="actividades"
+            activities={vencidas}
+            emptyText={
+              <div className="text-center">
+                <p>No hay actividades vencidas.</p>
+              </div>
+            }
+            bg="bg-danger-subtle"
+            border="border-danger-subtle"
+            deleteActivity={deleteActivity}
+            getPriorityBadge={getPriorityBadge}
+            formatDate={formatDate}
+          />
 
-      <section className="card">
-        <h2>Para hoy</h2>
-        {paraHoy.length === 0 ? (
-          <p className="muted">Puedes relajarte😎.No tienes tareas para hoy.</p>
-        ) : (
-          <ul className="list">
-            {paraHoy.map((a) => (
-              <li key={a.id} className="item">
-                <Link to={`/actividad/${a.id}`}>{a.titulo}</Link>
-                <span className="badge">{a.fecha || "—"}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          <ActivityColumn
+            title="Hoy"
+            subtitle="actividades"
+            activities={paraHoy}
+            emptyText={
+              <div className="text-center">
+                <p>No hay actividades para hoy.</p>
+              </div>
+            }
+            bg="bg-primary-subtle"
+            border="border-primary-subtle"
+            deleteActivity={deleteActivity}
+            getPriorityBadge={getPriorityBadge}
+            formatDate={formatDate}
+          />
 
-      <section className="card">
-        <h2>Próximas</h2>
-        {proximas.length === 0 ? (
-          <p className="muted">Nada programado a futuro (por ahora).</p>
-        ) : (
-          <ul className="list">
-            {proximas.map((a) => (
-              <li key={a.id} className="item">
-                <Link to={`/actividad/${a.id}`}>{a.titulo}</Link>
-                <span className="badge">{a.fecha || "—"}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <section className="card">
-        <h2>Vencidas</h2>
-        {vencidas.length === 0 ? (
-          <p className="muted">¡Bien! No tienes tareas vencidas.</p>
-        ) : (
-          <ul className="list">
-            {vencidas.map((a) => (
-              <li key={a.id} className="item">
-                <Link to={`/actividad/${a.id}`}>{a.titulo}</Link>
-                <span className="badge">{a.fecha || "—"}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+          <ActivityColumn
+            title="Próximas"
+            subtitle="actividades"
+            activities={proximas}
+            emptyText={
+              <div className="text-center">
+                <p>No hay próximas actividades.</p>
+              </div>
+            }
+            bg="bg-success-subtle"
+            border="border-success-subtle"
+            deleteActivity={deleteActivity}
+            getPriorityBadge={getPriorityBadge}
+            formatDate={formatDate}
+          />
+      </div>
 
-      <div style={{ marginTop: 12 }}>
-        <Link to="/crear">+ Crear actividad</Link>
+      <div className="text-center mt-4">
+        <span>¿Cómo se organiza esto?</span>
+        <i 
+          className="bi bi-info-circle text-muted ms-2" 
+          data-bs-toggle="tooltip" 
+          data-bs-placement="top" 
+          title="Las actividades se organizan primero por fecha (más antiguas arriba), luego por tiempo estimado (menor tiempo primero)."
+        ></i>
       </div>
     </div>
   );
