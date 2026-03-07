@@ -17,12 +17,6 @@ export function validateActivityForm({title, description, date, durationMin}) {
   if (!date)
     errors.date = "La fecha es obligatoria"
 
-  if (!durationMin)
-    errors.duration = "La duración es obligatoria"
-
-  if (durationMin && durationMin < 5)
-    errors.duration = "La duración mínima es 5 minutos"
-
   return errors
 }
 

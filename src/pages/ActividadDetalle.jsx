@@ -353,7 +353,8 @@ export default function ActividadDetalle() {
                     disabled={creating}
                   />
                   {fieldErrors.title && (
-                    <div className="invalid-feedback" style={{ display: 'block' }}>
+                    <div className="invalid-feedback d-block bg-danger-subtle rounded p-2">
+                      <i className="bi bi-info-circle me-2"></i>
                       {fieldErrors.title}
                     </div>
                   )}
@@ -372,7 +373,8 @@ export default function ActividadDetalle() {
                     rows={3}
                   />
                   {fieldErrors.description && (
-                    <div className="invalid-feedback" style={{ display: 'block' }}>
+                    <div className="invalid-feedback d-block bg-danger-subtle rounded p-2">
+                      <i className="bi bi-info-circle me-2"></i>
                       {fieldErrors.description}
                     </div>
                   )}
@@ -393,7 +395,8 @@ export default function ActividadDetalle() {
                     min="0"
                   />
                   {fieldErrors.minutos && (
-                    <div className="invalid-feedback" style={{ display: 'block' }}>
+                    <div className="invalid-feedback d-block bg-danger-subtle rounded p-2">
+                      <i className="bi bi-info-circle me-2"></i>
                       {fieldErrors.minutos}
                     </div>
                   )}

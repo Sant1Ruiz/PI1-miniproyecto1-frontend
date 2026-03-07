@@ -88,6 +88,18 @@ export default function Hoy() {
       
       <div className="row">
         <ActivityColumn
+            title="Vencidas"
+            subtitle="actividades"
+            activities={vencidas}
+            emptyText="No hay actividades vencidas."
+            bg="bg-danger-subtle"
+            border="border-danger-subtle"
+            deleteActivity={handleDeleteActivity}
+            getPriorityBadge={getPriorityBadge}
+            formatDate={formatDate}
+          />
+          
+        <ActivityColumn
             title="Para hoy"
             subtitle="actividades"
             activities={paraHoy}
@@ -111,17 +123,7 @@ export default function Hoy() {
             formatDate={formatDate}
           />
 
-          <ActivityColumn
-            title="Vencidas"
-            subtitle="actividades"
-            activities={vencidas}
-            emptyText="No hay actividades vencidas."
-            bg="bg-danger-subtle"
-            border="border-danger-subtle"
-            deleteActivity={handleDeleteActivity}
-            getPriorityBadge={getPriorityBadge}
-            formatDate={formatDate}
-          />
+          
       </div>
     </div>
   );

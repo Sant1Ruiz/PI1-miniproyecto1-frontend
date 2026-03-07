@@ -183,25 +183,6 @@ export default function Crear() {
                 )}
               </div>
               <div className="mb-3">
-                <label htmlFor="activitieDuration" className="form-label">Duración (min) <span className="text-danger">*</span></label>
-                <input 
-                  type="number" 
-                  className={`form-control ${errors.duration ? "is-invalid" : ""}`}
-                  id="activitieDuration" 
-                  placeholder="Ej: 30" 
-                  value={durationMin} 
-                  onChange={(e) => setDurationMin(e.target.value)} 
-                  name="duration" 
-                  min={5}
-                />
-                {errors.duration && (
-                  <div className="invalid-feedback bg-danger-subtle p-2 rounded">
-                    <i class="bi bi-exclamation-circle me-2"></i>
-                    {errors.duration}
-                  </div>
-                )}
-              </div>
-              <div className="mb-3">
                 <label htmlFor="activitieStatus" className="form-label">Prioridad <span className="text-danger">*</span></label>
                 {priorityMssg &&(
                   <div className="alert alert-warning p-2 small">
