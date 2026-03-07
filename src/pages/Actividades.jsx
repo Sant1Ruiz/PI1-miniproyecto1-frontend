@@ -218,7 +218,7 @@ export default function Actividades() {
                               <i className="bi bi-calendar"></i> {formatDate(activity.due_date)}
                             </small>
                             <small className="text-muted">
-                              <i className="bi bi-clock"></i> {activity.duracionMin} min
+                              <i className="bi bi-clock"></i> {activity.duration} min
                             </small>
                           </div>
                         </div>
