@@ -10,6 +10,7 @@ import ActividadDetalle from "./pages/ActividadDetalle.jsx";
 import Progreso from "./pages/Progreso.jsx";
 import Actividades from "./pages/Actividades.jsx";
 import Conexion from "./pages/Conexion.jsx";
+import Profile from "./pages/Profile.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import RedirectPublic from "./components/RedirectPublic.jsx";
 import LogoutButton from "./components/LogoutButton.jsx";
@@ -32,6 +33,7 @@ export default function App() {
             <Link to="/progreso">Progreso</Link>
             <Link to="/actividades">Actividades</Link>
             <Link to="/conexion">Conexión</Link>
+            <Link to="/perfil">Mi Perfil</Link>
             {localStorage.getItem("token") && <LogoutButton />}
           </nav>
         </>
@@ -60,6 +62,7 @@ export default function App() {
         <Route path="/progreso" element={<ProtectedRoute><Progreso /></ProtectedRoute>} />
         <Route path="/actividades" element={<ProtectedRoute><Actividades /></ProtectedRoute>} />
         <Route path="/conexion" element={<ProtectedRoute><Conexion /></ProtectedRoute>} />
+        <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
         <Route path="*" element={<NotFound />} />
       </Routes>
