@@ -22,7 +22,12 @@ export function AuthProvider({ children }) {
     })
       .then(res => res.json())
       .then(data => {
-        setUser(data)
+        if (data && data.success) {
+          setUser(data.data)
+        } else {
+          setUser(null)
+          logout()
+        }
       })
       .catch(() => logout())
       .finally(() => setLoading(false))
@@ -41,8 +46,15 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  function updateUserContext(newUserData) {
+    setUser(prevUser => ({
+      ...prevUser,
+      ...newUserData
+    }))
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout, updateUserContext }}>
       {children}
     </AuthContext.Provider>
   )
