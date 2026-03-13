@@ -9,6 +9,7 @@ export default function Login() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
 
   const navigate = useNavigate()
   const { login } = useAuth()
@@ -16,15 +17,19 @@ export default function Login() {
   async function handleSubmit(e) {
     e.preventDefault()
 
+    setIsLoading(true)
+
     try {
 
         const res = await loginRequest(email, password)
         console.log(res.token, res.user)
         login(res.token, res.user.email)
         localStorage.setItem("token", res.token)
+        setIsLoading(false)
         navigate("/hoy")
 
     } catch (err){
+      setIsLoading(false)
       setError("Email o contraseña incorrectos")
       console.log("Login error: ",err)
     }
@@ -48,6 +53,7 @@ export default function Login() {
               placeholder="Email"
               value={email}
               onChange={e => setEmail(e.target.value)}
+              disabled={isLoading}
             />
           </div>
         </div>
@@ -63,6 +69,7 @@ export default function Login() {
               value={password}
               placeholder="Contraseña"
               onChange={e => setPassword(e.target.value)}
+              disabled={isLoading}
             />
           </div>
           
@@ -74,8 +81,8 @@ export default function Login() {
           </div>
         )}
 
-        <button className="btn btn-primary w-100">
-          Iniciar sesión
+        <button className="btn btn-primary w-100" disabled={isLoading}>
+          {isLoading ? "Cargando..." : "Iniciar sesión"}
         </button>
 
       </form>
