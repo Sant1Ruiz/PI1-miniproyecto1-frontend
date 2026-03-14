@@ -5,11 +5,12 @@ import ActivityColumn from "../components/ActivityColumn";
 import { getPriorityBadge, formatDate } from "../utils/activityUtils";
 import Swal from "sweetalert2";
 import { useAuth } from "../context/AuthContext";
+import { getTodayInColombia } from "../utils/dateUtils";
 
 export default function Hoy() {
   const [activities, setActivities] = useState([]);
   const { token } = useAuth();
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayInColombia();
   const mainActivities = activities.filter((a)=> a.parent === null)
   
   useEffect(() => {

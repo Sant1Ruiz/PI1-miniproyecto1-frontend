@@ -14,6 +14,33 @@ import { useAuth } from "../context/AuthContext";
 import { updateProfileRequest } from "../api/auth";
 import Swal from "sweetalert2";
 
+function formatDateForInput(dateValue) {
+  if (!dateValue) {
+    return "";
+  }
+
+  return String(dateValue).split("T")[0];
+}
+
+function formatPriorityForInput(activity) {
+  if (activity?.priority != null) {
+    return String(activity.priority);
+  }
+
+  switch (String(activity?.priority_display || "").toLowerCase()) {
+    case "baja":
+      return "1";
+    case "media":
+      return "2";
+    case "alta":
+      return "3";
+    case "urgente":
+      return "4";
+    default:
+      return "";
+  }
+}
+
 export default function ActividadDetalle() {
   const { id } = useParams();
   const { user, updateUserContext } = useAuth();
@@ -53,20 +80,38 @@ export default function ActividadDetalle() {
     try {
       setLoading(true);
       const act = await getActivity(id);
-      const subs = await getSubtasks(id);
-      setHoursToday(await getTimeToDate({ date: act.due_date }));
       setActividad(act);
-      setSubtasks(subs);
       // Initialize edit states
       setActivityParent(act.parent || null);
       setEditTitle(act.title || '');
       setEditDescription(act.description || '');
-      setEditDueDate(act.due_date || '');
-      setEditPriority(act.priority_display || '');
-      setEditEstimatedHours(act.durationHours || '');
+      setEditDueDate(formatDateForInput(act.due_date));
+      setEditPriority(formatPriorityForInput(act));
+      setEditEstimatedHours(act.durationHours || act.duracionHoras || act.duration || '');
+
+      const [subsResult, hoursResult] = await Promise.allSettled([
+        getSubtasks(id),
+        act.due_date ? getTimeToDate({ date: act.due_date }) : Promise.resolve('')
+      ]);
+
+      if (subsResult.status === "fulfilled") {
+        setSubtasks(subsResult.value);
+      } else {
+        console.error(subsResult.reason);
+        setSubtasks([]);
+      }
+
+      if (hoursResult.status === "fulfilled") {
+        setHoursToday(hoursResult.value);
+      } else {
+        console.error(hoursResult.reason);
+        setHoursToday('');
+      }
+
       setError(null);
     } catch (err) {
       console.error(err);
+      setActividad(null);
       setError('Error al cargar actividad');
     } finally {
       setLoading(false);
@@ -225,8 +270,8 @@ export default function ActividadDetalle() {
     // Reset to original values
     setEditTitle(actividad.title || '');
     setEditDescription(actividad.description || '');
-    setEditDueDate(actividad.due_date || '');
-    setEditPriority(actividad.priority_display || '');
+    setEditDueDate(formatDateForInput(actividad.due_date));
+    setEditPriority(formatPriorityForInput(actividad));
     setEditEstimatedHours(actividad.duracionHoras || '');
   };
 
@@ -235,8 +280,8 @@ export default function ActividadDetalle() {
       const payload = {
         title: editTitle,
         description: editDescription,
-        due_date: editDueDate,
-        priority_display: editPriority,
+        due_date: editDueDate ? `${editDueDate}T00:00:00Z` : null,
+        priority_id: editPriority ? Number(editPriority) : null,
         duracionHoras: Number(editEstimatedHours),
       };
       const updated = await updateActivity(id, payload);
@@ -246,11 +291,12 @@ export default function ActividadDetalle() {
       setTimeout(() => setSuccessMessage(null), 3000);
 
       // Si la fecha cambió, actualizar las subactividades
-      if (editDueDate !== actividad.due_date) {
-        const updatePromises = subtasks.map(subtask => updateActivity(subtask.id, { due_date: editDueDate }));
+      if (editDueDate !== formatDateForInput(actividad.due_date)) {
+        const updatedDueDate = editDueDate ? `${editDueDate}T00:00:00Z` : null;
+        const updatePromises = subtasks.map(subtask => updateActivity(subtask.id, { due_date: updatedDueDate }));
         try {
           await Promise.all(updatePromises);
-          setSubtasks(prev => prev.map(s => ({ ...s, due_date: editDueDate })));
+          setSubtasks(prev => prev.map(s => ({ ...s, due_date: updatedDueDate })));
         } catch (err) {
           console.error('Error al actualizar fechas de subactividades', err);
           setError('Error al actualizar fechas de subactividades');
@@ -414,9 +460,10 @@ export default function ActividadDetalle() {
                 value={editPriority}
                 onChange={(e) => setEditPriority(e.target.value)}
               >
-                <option value="baja">Baja</option>
-                <option value="media">Media</option>
-                <option value="alta">Alta</option>
+                <option value="1">Baja</option>
+                <option value="2">Media</option>
+                <option value="3">Alta</option>
+                <option value="4">Urgente</option>
               </select>
             </div>)}
             {activityParent !== null && (
