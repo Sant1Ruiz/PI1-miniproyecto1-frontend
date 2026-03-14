@@ -20,6 +20,7 @@ export default function Register() {
 
   const [errors, setErrors] = useState({})
   const [serverError, setServerError] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
 
     const handleChange = (e) => {
     setForm({
@@ -39,6 +40,8 @@ export default function Register() {
       return
     }
 
+    setIsLoading(true)
+
     try {
 
         await registerRequest({
@@ -56,9 +59,12 @@ export default function Register() {
         })
         login(loginData.token, loginData.user.email)
         localStorage.setItem("token", loginData.token)
+        setIsLoading(false)
         navigate("/hoy")
 
     }catch (err) {
+
+        setIsLoading(false)
 
         console.error("Registration error:", err)
 
@@ -108,6 +114,7 @@ export default function Register() {
                 placeholder="Ingrese su nombre"
                 value={form.name}
                 onChange={handleChange}
+                disabled={isLoading}
                 />
             </div>
           {errors.name && <div className="text-danger">{errors.name}</div>}
@@ -125,6 +132,7 @@ export default function Register() {
                 name="email"
                 value={form.email}
                 onChange={handleChange}
+                disabled={isLoading}
             />
           </div>
           {errors.email && <div className="text-danger">{errors.email}</div>}
@@ -142,6 +150,7 @@ export default function Register() {
                 name="password"
                 value={form.password}
                 onChange={handleChange}
+                disabled={isLoading}
             />
         </div>
           {errors.password && <div className="text-danger">{errors.password}</div>}
@@ -159,6 +168,7 @@ export default function Register() {
             name="confirmPassword"
             value={form.confirmPassword}
             onChange={handleChange}
+            disabled={isLoading}
           />
         </div>
           {errors.confirmPassword && (
@@ -175,8 +185,9 @@ export default function Register() {
         <button 
             className="btn btn-primary w-100" 
             type="submit"
+            disabled={isLoading}
         >
-          Crear cuenta
+          {isLoading ? "Cargando..." : "Crear cuenta"}
         </button>
 
       </form>
