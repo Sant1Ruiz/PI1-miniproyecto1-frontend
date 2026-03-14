@@ -5,7 +5,7 @@ import { getPriorityBadge, formatDate, getStatusBadge } from '../utils/activityU
 import ActivityCard from '../components/ActivityCard';
 import Swal from 'sweetalert2';
 
-const priorityOrder = { 'urgente': 4, 'alta': 3, 'media': 2, 'baja': 1 };
+const priorityOrder = { 'alta': 3, 'media': 2, 'baja': 1 };
 
 function compareActivities(a, b) {
   // Fecha más antiguas primero
@@ -110,11 +110,10 @@ export default function Actividades() {
   }, [activities, searchTerm, filterPriority, filterStatus]);
 
   const groupedByPriority = useMemo(() => {
-    const urgente = filteredAndSortedActivities.filter(a => a.priority_display?.toLowerCase() === 'urgente');
     const alta = filteredAndSortedActivities.filter(a => a.priority_display?.toLowerCase() === 'alta');
     const media = filteredAndSortedActivities.filter(a => a.priority_display?.toLowerCase() === 'media');
     const baja = filteredAndSortedActivities.filter(a => a.priority_display?.toLowerCase() === 'baja');
-    return { urgente, alta, media, baja };
+    return { alta, media, baja };
   }, [filteredAndSortedActivities]);
 
   if (loading) {
@@ -173,7 +172,6 @@ export default function Actividades() {
                   <option value="baja">Baja</option>
                   <option value="media">Media</option>
                   <option value="alta">Alta</option>
-                  <option value="urgente">Urgente</option>
                 </select>
               </div>
               <div className="col-md-6">
@@ -250,41 +248,6 @@ export default function Actividades() {
         </div>
 
         <div className="tab-pane fade" id="priority" role="tabpanel">
-          {/* Urgente */}
-          <div className="mb-4">
-            <div className="d-flex align-items-center gap-2 mb-3">
-              <div className="bg-danger rounded-circle" style={{width: '12px', height: '12px'}}></div>
-              <h4>Urgente</h4>
-              <span className="text-muted">({groupedByPriority.urgente.length})</span>
-            </div>
-            {groupedByPriority.urgente.length === 0 ? (
-              <p className="text-muted ms-4">No hay actividades urgentes</p>
-            ) : (
-              <div className="row g-3">
-                {groupedByPriority.urgente.map((activity) => (
-                  <div key={activity.id} className="col-12">
-                    <div className="card">
-                      <div className="card-body">
-                        <Link to={`/actividad/${activity.id}`} className="text-decoration-none">
-                          <h5 className="card-title">{activity.title}</h5>
-                        </Link>
-                        <p className="card-text text-muted">{activity.description}</p>
-                        <div className="d-flex gap-2">
-                          <span className={`badge bg-${getStatusBadge(activity.status_display)}`}>
-                            {activity.status_display}
-                          </span>
-                          <small className="text-muted">
-                            <i className="bi bi-calendar"></i> {formatDate(activity.due_date)}
-                          </small>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* Alta */}
           <div className="mb-4">
             <div className="d-flex align-items-center gap-2 mb-3">

@@ -44,8 +44,8 @@ export default function Login() {
 
         <div className="mb-3">
           <label className="fw-bold" htmlFor="user">Nombre de usuario</label>
-          <div class="mb-3 position-relative">
-            <i class="bi bi-person input-icon"></i>
+          <div className="mb-3 position-relative">
+            <i className="bi bi-person input-icon"></i>
             <input 
               id="user"
               type="email" 
@@ -60,8 +60,8 @@ export default function Login() {
 
         <div className="mb-3">
           <label className="fw-bold" htmlFor="password">Contraseña</label>
-          <div class="mb-3 position-relative">
-            <i class="bi bi-lock input-icon"></i>
+          <div className="mb-3 position-relative">
+            <i className="bi bi-lock input-icon"></i>
             <input 
               id="password"
               type="password" 

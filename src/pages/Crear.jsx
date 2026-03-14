@@ -24,8 +24,8 @@ export default function Crear() {
 
   useEffect(() => {
     if (isToday) {
-      setPriorityMsg("Como la fecha límite es hoy, la prioridad se establecerá automáticamente en 'Urgente'.")
-      setPriority("4")
+      setPriorityMsg("Como la fecha límite es hoy, la prioridad se establecerá automáticamente en 'Alta'.")
+      setPriority("3")
     } else {
       setPriorityMsg("")
       setPriority("1")
@@ -37,7 +37,7 @@ export default function Crear() {
     const today = new Date().toISOString().slice(0,10)
 
     if (date === today) {
-      return 4 // urgente
+      return 3 // alta
     }
     return Number(priority)
   }
@@ -201,7 +201,6 @@ export default function Crear() {
                   <option value="1">Baja</option>
                   <option value="2">Media</option>
                   <option value="3">Alta</option>
-                  <option value="4">Urgente</option>
                 </select>
               </div>
 

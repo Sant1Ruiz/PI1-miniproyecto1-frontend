@@ -6,8 +6,6 @@ export function getPriorityBadge(priority) {
       return "warning";
     case "alta":
       return "warning";
-    case "urgente":
-      return "danger";
     default:
       return "secondary";
   }
