@@ -93,6 +93,13 @@ export default function Hoy() {
         <div className="col">
           <h2>Actividades de Hoy</h2>
           <p className="text-muted">Estas son las actividades que tienes programadas</p>
+            <span>¿Cómo se organiza esto?</span>
+            <i 
+              className="bi bi-info-circle text-muted ms-2" 
+              data-bs-toggle="tooltip" 
+              data-bs-placement="top" 
+              title="Las actividades se organizan primero por fecha (más antiguas arriba), luego por tiempo estimado (menor tiempo primero)."
+            ></i>
         </div>
         <div className="col-auto">
           <Link to="/crear" className="btn btn-primary text-decoration-none">+ Crear actividad</Link>
@@ -147,16 +154,6 @@ export default function Hoy() {
             getPriorityBadge={getPriorityBadge}
             formatDate={formatDate}
           />
-      </div>
-
-      <div className="text-center mt-4">
-        <span>¿Cómo se organiza esto?</span>
-        <i 
-          className="bi bi-info-circle text-muted ms-2" 
-          data-bs-toggle="tooltip" 
-          data-bs-placement="top" 
-          title="Las actividades se organizan primero por fecha (más antiguas arriba), luego por tiempo estimado (menor tiempo primero)."
-        ></i>
       </div>
     </div>
   );
