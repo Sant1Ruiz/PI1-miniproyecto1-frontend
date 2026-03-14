@@ -4,28 +4,39 @@ import { getActivities } from "../api/activities";
 import ActivityColumn from "../components/ActivityColumn";
 import { getPriorityBadge, formatDate } from "../utils/activityUtils";
 import Swal from "sweetalert2";
+import { useAuth } from "../context/AuthContext";
+import { getTodayInColombia } from "../utils/dateUtils";
 
 export default function Hoy() {
   const [activities, setActivities] = useState([]);
-  const today = new Date().toISOString().split("T")[0];
+
+  const { token } = useAuth();
+  const today = getTodayInColombia();
+  const mainActivities = activities.filter((a)=> a.parent === null)
+
   
   useEffect(() => {
+    if (!token) {
+      setActivities([]);
+      return;
+    }
+
     getActivities()
       .then(data => {
         setActivities(data);
       })
       .catch(err => console.error(err));
-  }, []);
+  }, [token]);
 
-  const paraHoy = activities
+  const paraHoy = mainActivities
     .filter((a) => a.due_date?.split("T")[0] === today)
     .sort((a, b) => a.duracionMin - b.duracionMin);
 
-  const proximas = activities
+  const proximas = mainActivities
     .filter((a) => a.due_date?.split("T")[0] > today)
     .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.duracionMin - b.duracionMin);
 
-  const vencidas = activities
+  const vencidas = mainActivities
     .filter((a) => a.due_date?.split("T")[0] < today)
     .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.duracionMin - b.duracionMin);
 
@@ -85,6 +96,13 @@ export default function Hoy() {
         <div className="col">
           <h2>Actividades de Hoy</h2>
           <p className="text-muted">Estas son las actividades que tienes programadas</p>
+            <span>¿Cómo se organiza esto?</span>
+            <i 
+              className="bi bi-info-circle text-muted ms-2" 
+              data-bs-toggle="tooltip" 
+              data-bs-placement="top" 
+              title="Las actividades se organizan primero por fecha (más antiguas arriba), luego por tiempo estimado (menor tiempo primero)."
+            ></i>
         </div>
         <div className="col-auto">
           <Link to="/crear" className="btn btn-primary text-decoration-none">+ Crear actividad</Link>
@@ -139,16 +157,6 @@ export default function Hoy() {
             getPriorityBadge={getPriorityBadge}
             formatDate={formatDate}
           />
-      </div>
-
-      <div className="text-center mt-4">
-        <span>¿Cómo se organiza esto?</span>
-        <i 
-          className="bi bi-info-circle text-muted ms-2" 
-          data-bs-toggle="tooltip" 
-          data-bs-placement="top" 
-          title="Las actividades se organizan primero por fecha (más antiguas arriba), luego por tiempo estimado (menor tiempo primero)."
-        ></i>
       </div>
     </div>
   );

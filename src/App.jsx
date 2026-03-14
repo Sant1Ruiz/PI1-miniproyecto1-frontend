@@ -10,13 +10,16 @@ import ActividadDetalle from "./pages/ActividadDetalle.jsx";
 import Progreso from "./pages/Progreso.jsx";
 import Actividades from "./pages/Actividades.jsx";
 import Conexion from "./pages/Conexion.jsx";
+import Profile from "./pages/Profile.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import RedirectPublic from "./components/RedirectPublic.jsx";
 import LogoutButton from "./components/LogoutButton.jsx";
 import NotFound from "./pages/NotFound.jsx";
+import { useAuth } from "./context/AuthContext";
 export default function App() {
   const location = useLocation();
   const enPortada = location.pathname === "/";
+  const { token } = useAuth();
 
   return (
     <div className="container">
@@ -31,8 +34,8 @@ export default function App() {
             <Link to="/crear">Crear</Link>
             <Link to="/progreso">Progreso</Link>
             <Link to="/actividades">Actividades</Link>
-            <Link to="/conexion">Conexión</Link>
-            {localStorage.getItem("token") && <LogoutButton />}
+            <Link to="/perfil">Mi Perfil</Link>
+            {token && <LogoutButton />}
           </nav>
         </>
       )}
@@ -60,6 +63,7 @@ export default function App() {
         <Route path="/progreso" element={<ProtectedRoute><Progreso /></ProtectedRoute>} />
         <Route path="/actividades" element={<ProtectedRoute><Actividades /></ProtectedRoute>} />
         <Route path="/conexion" element={<ProtectedRoute><Conexion /></ProtectedRoute>} />
+        <Route path="/perfil" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
         <Route path="*" element={<NotFound />} />
       </Routes>

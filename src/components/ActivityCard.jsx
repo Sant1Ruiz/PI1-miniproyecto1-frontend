@@ -5,14 +5,14 @@ import { getSubtasks } from "../api/activities";
 export default function ActivityCard({ activity, deleteActivity, getPriorityBadge, formatDate }) {
   const badge = getPriorityBadge(activity.priority_display);
   const [subtasks, setSubtasks] = useState([]);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isMainActivity = activity.parent === null;
 
   useEffect(() => {
-    if (!activity.parent_id) {
+    if (isMainActivity) {
       getSubtasks(activity.id).then(setSubtasks);
     }
-  }, [activity]);
-
-  const collapseId = `collapse-${activity.id}`;
+  }, [activity.id, isMainActivity]);
 
   return (
     <div className="col-md-12">
@@ -37,15 +37,17 @@ export default function ActivityCard({ activity, deleteActivity, getPriorityBadg
                 onClick={() => deleteActivity(activity.id, activity.title)}
               ></i>
 
-              {!activity.parent_id && subtasks.length > 0 && (
-                <i
-                  className="bi bi-three-dots-vertical"
-                  role="button"
+              {isMainActivity && subtasks.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-link text-dark p-0 border-0 d-inline-flex align-items-center"
                   aria-label="Ver subtareas"
                   title="Ver subtareas"
-                  data-bs-toggle="collapse"
-                  data-bs-target={`#${collapseId}`}
-                ></i>
+                  aria-expanded={isExpanded}
+                  onClick={() => setIsExpanded((prev) => !prev)}
+                >
+                  <i className={`bi ${isExpanded ? "bi-chevron-up" : "bi-chevron-down"} fs-5`}></i>
+                </button>
               )}
             </div>
           </div>
@@ -53,7 +55,7 @@ export default function ActivityCard({ activity, deleteActivity, getPriorityBadg
           <p className="text-muted">{activity.description}</p>
 
           <small
-            className={`bg-${badge}-subtle border border-${badge}-subtle text-${badge} rounded-2 px-2 py-1`}
+            className={`bg-light border border-dark text-dark rounded-2 px-2 py-1`}
           >
             {activity.priority_display}
           </small>
@@ -62,8 +64,8 @@ export default function ActivityCard({ activity, deleteActivity, getPriorityBadg
           {formatDate(activity.due_date)}
 
           {/* Collapse subtasks */}
-          {!activity.parent_id && subtasks.length > 0 && (
-            <div className="collapse mt-3" id={collapseId}>
+          {isMainActivity && subtasks.length > 0 && (
+            <div className={`collapse mt-3 ${isExpanded ? "show" : ""}`}>
               <ul className="list-group list-group-flush">
                 {subtasks.map((sub) => (
                   <li key={sub.id} className="list-group-item">

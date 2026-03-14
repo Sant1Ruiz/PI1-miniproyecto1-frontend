@@ -5,12 +5,13 @@ import { useNavigate } from "react-router-dom";
 import { createActivity } from "../api/activities";
 import { validateActivityForm } from "../utils/validators";
 import Swal from "sweetalert2";
+import { getTodayInColombia } from "../utils/dateUtils";
 
 export default function Crear() {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [date, setDate] = useState("")
-  const [durationMin, setDurationMin] = useState("")
+  const [durationHours, setDurationHours] = useState("")
   const [priority, setPriority] = useState("1")
   const [errors, setErrors] = useState({})
   const [priorityMssg, setPriorityMsg] = useState("")
@@ -19,13 +20,13 @@ export default function Crear() {
     icon: "bi-info-circle",
     message: "Completa todos los campos requeridos para crear una nueva actividad."
   })
-  const today = new Date().toISOString().split("T")[0]
+  const today = getTodayInColombia()
   const isToday = date === today
 
   useEffect(() => {
     if (isToday) {
-      setPriorityMsg("Como la fecha límite es hoy, la prioridad se establecerá automáticamente en 'Urgente'.")
-      setPriority("4")
+      setPriorityMsg("Como la fecha límite es hoy, la prioridad se establecerá automáticamente en 'Alta'.")
+      setPriority("3")
     } else {
       setPriorityMsg("")
       setPriority("1")
@@ -34,10 +35,10 @@ export default function Crear() {
   const navigate = useNavigate()
 
   function getPriorityId() {
-    const today = new Date().toISOString().slice(0,10)
+    const today = getTodayInColombia()
 
     if (date === today) {
-      return 4 // urgente
+      return 3 // alta
     }
     return Number(priority)
   }
@@ -48,7 +49,7 @@ export default function Crear() {
       title,
       description,
       date,
-      durationMin
+      durationHours
     })
 
     setErrors(newErrors)
@@ -201,7 +202,6 @@ export default function Crear() {
                   <option value="1">Baja</option>
                   <option value="2">Media</option>
                   <option value="3">Alta</option>
-                  <option value="4">Urgente</option>
                 </select>
               </div>
 

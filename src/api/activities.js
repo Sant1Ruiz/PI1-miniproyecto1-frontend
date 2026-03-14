@@ -4,13 +4,19 @@ import { getToken } from "../api/auth";
 const BASE_URL = import.meta.env.VITE_API_URL;
 
 const API_URL = `${BASE_URL}/api/activities/`;
-const token = localStorage.getItem("token")
+
+function getAuthHeaders(extraHeaders = {}) {
+  const token = getToken();
+
+  return {
+    Authorization: `Token ${token}`,
+    ...extraHeaders
+  };
+}
 
 export async function getActivities() {
    const resp = await fetch(`${API_URL}`, {
-    headers: {
-      "Authorization": `Token ${token}`
-    }
+    headers: getAuthHeaders()
   })
   const data = await resp.json()
   return data.data ?? data
@@ -19,10 +25,9 @@ export async function getActivities() {
 export async function createActivity(payload) {
   const res = await fetch(`${API_URL}`,{
     method: "POST",
-    headers: {
-      "Authorization": `Token ${token}`,
+    headers: getAuthHeaders({
       "Content-Type": "application/json"
-    },
+    }),
     body: JSON.stringify(payload)
   })
   const data = await res.json()
@@ -31,9 +36,7 @@ export async function createActivity(payload) {
 
 export async function getSubtasks(id) {
   const res = await fetch(`${API_URL}${id}/subtasks/`,{
-    headers: {
-      "Authorization": `Token ${token}`
-    }
+    headers: getAuthHeaders()
   })
   const data = await res.json()
   return data.data ?? data
@@ -42,9 +45,7 @@ export async function getSubtasks(id) {
 export async function deleteActivity(id) {
   const res = await fetch(`${API_URL}${id}/`, {
     method: "DELETE",
-    headers: {
-      "Authorization": `Token ${token}`
-    }
+    headers: getAuthHeaders()
   })
 
   if (!res.ok) {
@@ -57,9 +58,7 @@ export async function deleteActivity(id) {
 export async function getActivity(id) {
 
   const res = await fetch(`${API_URL}${id}/`, {
-    headers: {
-      "Authorization": `Token ${token}`
-    }
+    headers: getAuthHeaders()
   })
 
   if (!res.ok) {
@@ -76,10 +75,9 @@ export async function toggleCompleteActivity(activity) {
 
   const res = await fetch(`${API_URL}${activity.id}/`, {
     method: "PATCH",
-    headers: {
-      "Authorization": `Token ${token}`,
+    headers: getAuthHeaders({
       "Content-Type": "application/json"
-    },
+    }),
     body: JSON.stringify({
       status_id: newStatus
     })
@@ -96,10 +94,9 @@ export async function toggleCompleteActivity(activity) {
 export async function updateActivity(id, payload) {
   const res = await fetch(`${API_URL}${id}/`, {
     method: "PATCH",
-    headers: {
-      "Authorization" : `Token ${token}`,
+    headers: getAuthHeaders({
       "Content-Type": "application/json"
-    },
+    }),
     body: JSON.stringify(payload)
   })
 
@@ -107,6 +104,21 @@ export async function updateActivity(id, payload) {
     throw new Error("No se pudo actualizar la actividad")
   }
 
+  const data = await res.json()
+  return data.data ?? data
+}
+
+export async function getTimeToDate(payload) {
+    const res = await fetch(`${API_URL}totalhours?date=${payload.date}`, {
+    method: "GET",
+    headers: getAuthHeaders({
+      "Content-Type": "application/json"
+    }),
+  })
+
+  if (!res.ok) {
+    throw new Error("No se pudo obtener el tiempo total")
+  }
   const data = await res.json()
   return data.data ?? data
 }
