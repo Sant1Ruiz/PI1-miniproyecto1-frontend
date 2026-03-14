@@ -72,7 +72,10 @@ export default function Actividades() {
 
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/activities/${id}/`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: {
+          "Authorization": `Token ${localStorage.getItem('access_token')}`
+        }
       });
 
       if (!res.ok) throw new Error();
