@@ -110,3 +110,19 @@ export async function updateActivity(id, payload) {
   const data = await res.json()
   return data.data ?? data
 }
+
+export async function getTimeToDate(payload) {
+    const res = await fetch(`${API_URL}totalhours?date=${payload.date}`, {
+    method: "GET",
+    headers: {
+      "Authorization" : `Token ${token}`,
+      "Content-Type": "application/json"
+    },
+  })
+
+  if (!res.ok) {
+    throw new Error("No se pudo obtener el tiempo total")
+  }
+  const data = await res.json()
+  return data.data ?? data
+}
