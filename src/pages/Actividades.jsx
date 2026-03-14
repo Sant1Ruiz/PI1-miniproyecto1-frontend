@@ -74,7 +74,7 @@ export default function Actividades() {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/activities/${id}/`, {
         method: "DELETE",
         headers: {
-          "Authorization": `Token ${localStorage.getItem('access_token')}`
+          "Authorization": `Token ${localStorage.getItem("token")}`
         }
       });
 
