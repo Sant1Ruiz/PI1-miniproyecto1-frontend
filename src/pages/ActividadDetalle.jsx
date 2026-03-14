@@ -44,7 +44,7 @@ function formatPriorityForInput(activity) {
 
 export default function ActividadDetalle() {
   const { id } = useParams();
-  const { user, updateUserContext } = useAuth();
+  const { user, token, updateUserContext } = useAuth();
   const [actividad, setActividad] = useState(null);
   const [subtasks, setSubtasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -354,7 +354,7 @@ export default function ActividadDetalle() {
     if (!result.isConfirmed) return;
 
     try {
-      await deleteActivity(subId);
+      await deleteActivity(subId, token);
       setSubtasks(prev => prev.filter(s => s.id !== subId));
       Swal.fire({
         icon: "success",

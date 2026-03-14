@@ -14,6 +14,17 @@ function getAuthHeaders(extraHeaders = {}) {
   };
 }
 
+function getAuthHeadersWithToken(token, extraHeaders = {}) {
+  if (!token) {
+    return getAuthHeaders(extraHeaders);
+  }
+
+  return {
+    Authorization: `Token ${token}`,
+    ...extraHeaders
+  };
+}
+
 export async function getActivities() {
    const resp = await fetch(`${API_URL}`, {
     headers: getAuthHeaders()
@@ -42,10 +53,10 @@ export async function getSubtasks(id) {
   return data.data ?? data
 }
 
-export async function deleteActivity(id) {
+export async function deleteActivity(id, token) {
   const res = await fetch(`${API_URL}${id}/`, {
     method: "DELETE",
-    headers: getAuthHeaders()
+    headers: getAuthHeadersWithToken(token)
   })
 
   if (!res.ok) {
