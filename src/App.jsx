@@ -34,7 +34,6 @@ export default function App() {
             <Link to="/crear">Crear</Link>
             <Link to="/progreso">Progreso</Link>
             <Link to="/actividades">Actividades</Link>
-            <Link to="/conexion">Conexión</Link>
             <Link to="/perfil">Mi Perfil</Link>
             {token && <LogoutButton />}
           </nav>
