@@ -5,12 +5,15 @@ import ActivityColumn from "../components/ActivityColumn";
 import { getPriorityBadge, formatDate } from "../utils/activityUtils";
 import Swal from "sweetalert2";
 import { useAuth } from "../context/AuthContext";
+import { getTodayInColombia } from "../utils/dateUtils";
 
 export default function Hoy() {
   const [activities, setActivities] = useState([]);
+
   const { token } = useAuth();
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayInColombia();
   const mainActivities = activities.filter((a)=> a.parent === null)
+
   
   useEffect(() => {
     if (!token) {
@@ -25,15 +28,15 @@ export default function Hoy() {
       .catch(err => console.error(err));
   }, [token]);
 
-  const paraHoy = mainActivities
+  const paraHoy = activities
     .filter((a) => a.due_date?.split("T")[0] === today)
     .sort((a, b) => a.duracionMin - b.duracionMin);
 
-  const proximas = mainActivities
+  const proximas = activities
     .filter((a) => a.due_date?.split("T")[0] > today)
     .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.duracionMin - b.duracionMin);
 
-  const vencidas = mainActivities
+  const vencidas = activities
     .filter((a) => a.due_date?.split("T")[0] < today)
     .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.duracionMin - b.duracionMin);
 
