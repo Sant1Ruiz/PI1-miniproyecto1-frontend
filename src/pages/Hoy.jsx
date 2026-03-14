@@ -4,19 +4,26 @@ import { getActivities } from "../api/activities";
 import ActivityColumn from "../components/ActivityColumn";
 import { getPriorityBadge, formatDate } from "../utils/activityUtils";
 import Swal from "sweetalert2";
+import { useAuth } from "../context/AuthContext";
 
 export default function Hoy() {
   const [activities, setActivities] = useState([]);
+  const { token } = useAuth();
   const today = new Date().toISOString().split("T")[0];
   const mainActivities = activities.filter((a)=> a.parent === null)
   
   useEffect(() => {
+    if (!token) {
+      setActivities([]);
+      return;
+    }
+
     getActivities()
       .then(data => {
         setActivities(data);
       })
       .catch(err => console.error(err));
-  }, []);
+  }, [token]);
 
   const paraHoy = mainActivities
     .filter((a) => a.due_date?.split("T")[0] === today)

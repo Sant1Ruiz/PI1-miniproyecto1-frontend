@@ -15,9 +15,11 @@ import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import RedirectPublic from "./components/RedirectPublic.jsx";
 import LogoutButton from "./components/LogoutButton.jsx";
 import NotFound from "./pages/NotFound.jsx";
+import { useAuth } from "./context/AuthContext";
 export default function App() {
   const location = useLocation();
   const enPortada = location.pathname === "/";
+  const { token } = useAuth();
 
   return (
     <div className="container">
@@ -34,7 +36,7 @@ export default function App() {
             <Link to="/actividades">Actividades</Link>
             <Link to="/conexion">Conexión</Link>
             <Link to="/perfil">Mi Perfil</Link>
-            {localStorage.getItem("token") && <LogoutButton />}
+            {token && <LogoutButton />}
           </nav>
         </>
       )}
