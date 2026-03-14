@@ -24,6 +24,9 @@ export default function ActividadDetalle() {
   const [successMessage, setSuccessMessage] = useState(null);
   const [highlightedSubtaskId, setHighlightedSubtaskId] = useState(null);
 
+  // Warning state for exceeding daily limit
+  const [warningMessage, setWarningMessage] = useState(null);
+
   // Form states for subtasks
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
@@ -76,6 +79,19 @@ export default function ActividadDetalle() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Check for exceeding daily limit
+  useEffect(() => {
+    if (actividad && subtasks && user) {
+      const totalHours = (actividad.durationHours || 0) + subtasks.reduce((sum, s) => sum + (Number(s.duration || 0)), 0);
+      console.log(totalHours)
+      if (totalHours > user.max_horas_day) {
+        setWarningMessage(`Advertencia: Esta actividad supera el límite diario de ${user.max_horas_day} horas (total: ${totalHours} horas).`);
+      } else {
+        setWarningMessage(null);
+      }
+    }
+  }, [user?.max_horas_day, actividad, subtasks]);
 
 
   // (El código anterior que añadía el listener de focus fue eliminado para evitar recargas múltiples)
@@ -385,6 +401,13 @@ export default function ActividadDetalle() {
           <i className="bi bi-arrow-repeat"></i>
         </button>
       </div>
+
+      {warningMessage && (
+        <div className="alert alert-warning" role="alert">
+          <i className="bi bi-exclamation-triangle"></i> {warningMessage}
+        </div>
+      )}
+
       {isEditing ? (
         <div className="mb-3">
           <textarea
