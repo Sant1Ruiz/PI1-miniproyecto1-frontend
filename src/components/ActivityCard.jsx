@@ -53,7 +53,7 @@ export default function ActivityCard({ activity, deleteActivity, getPriorityBadg
           <p className="text-muted">{activity.description}</p>
 
           <small
-            className={`bg-${badge}-subtle border border-${badge}-subtle text-${badge} rounded-2 px-2 py-1`}
+            className={`bg-light border border-dark text-dark rounded-2 px-2 py-1`}
           >
             {activity.priority_display}
           </small>
