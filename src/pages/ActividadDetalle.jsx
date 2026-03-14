@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, act, Activity } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
+import { Modal } from "bootstrap";
 import { getPriorityBadge, formatDate, getStatusBadge } from "../utils/activityUtils";
 import {
   getActivity,
@@ -68,14 +69,25 @@ export default function ActividadDetalle() {
   const [editEstimatedHours, setEditEstimatedHours] = useState('');
   const [hoursToday, setHoursToday] = useState('');
   const [activityParent, setActivityParent] = useState(null);
+
+  const closeSubtaskModal = useCallback(() => {
+    const modalElement = document.getElementById('modalSubtarea');
+
+    if (!modalElement) {
+      return;
+    }
+
+    const modalInstance = Modal.getOrCreateInstance(modalElement);
+    modalInstance.hide();
+
+    document.body.classList.remove("modal-open");
+    document.body.style.removeProperty("padding-right");
+    document.querySelectorAll(".modal-backdrop").forEach((backdrop) => backdrop.remove());
+  }, []);
   
   const loadData = useCallback(async () => {
     // Hide any open modals to prevent backdrop issues
-    const modal = document.getElementById('modalSubtarea');
-    if (modal && window.bootstrap) {
-      const bsModal = window.bootstrap.Modal.getInstance(modal);
-      if (bsModal) bsModal.hide();
-    }
+    closeSubtaskModal();
 
     try {
       setLoading(true);
@@ -116,7 +128,7 @@ export default function ActividadDetalle() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [closeSubtaskModal, id]);
   
   useEffect(() => {
     loadData();
@@ -222,18 +234,18 @@ export default function ActividadDetalle() {
         parent: actividad.id // define as subtask
       };
       const created = await createActivity(payload);
-      setSubtasks([...subtasks, created]);
+      setSubtasks((prev) => [...prev, created]);
       setNewTitle('');
       setNewDescription('');
       setNewHours('');
+      setError(null);
+      closeSubtaskModal();
       setSuccessMessage('✓ Subtarea creada exitosamente');
-      setHoursToday(await getTimeToDate({ date: actividad.due_date }));
       setHighlightedSubtaskId(created.id);
-      // Close modal
-      const modal = document.getElementById('modalSubtarea');
-      if (modal && window.bootstrap) {
-        const bsModal = window.bootstrap.Modal.getInstance(modal);
-        if (bsModal) bsModal.hide();
+      try {
+        setHoursToday(await getTimeToDate({ date: actividad.due_date }));
+      } catch (hoursError) {
+        console.error(hoursError);
       }
       setTimeout(() => {
         setSuccessMessage(null);
