@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useState, useCallback, act, Activity } from "react";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { getPriorityBadge, formatDate, getStatusBadge } from "../utils/activityUtils";
 import {
   getActivity,
@@ -8,11 +8,15 @@ import {
   toggleCompleteActivity,
   createActivity,
   updateActivity,
+  getTimeToDate,
 } from "../api/activities";
+import { useAuth } from "../context/AuthContext";
+import { updateProfileRequest } from "../api/auth";
 import Swal from "sweetalert2";
 
 export default function ActividadDetalle() {
   const { id } = useParams();
+  const { user, updateUserContext } = useAuth();
   const [actividad, setActividad] = useState(null);
   const [subtasks, setSubtasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,19 +27,21 @@ export default function ActividadDetalle() {
   // Form states for subtasks
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [newMinutos, setNewMinutos] = useState('');
+  const [newHours, setNewHours] = useState('');
   const [creating, setCreating] = useState(false);
   const [validationError, setValidationError] = useState(null);
-  const [fieldErrors, setFieldErrors] = useState({ title: '', description: '', minutos: '' });
-
+  const [fieldErrors, setFieldErrors] = useState({ title: '', description: '', horas: '' });
+  
   // Edit states for main activity
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editDueDate, setEditDueDate] = useState('');
   const [editPriority, setEditPriority] = useState('');
-  const [editEstimatedMinutes, setEditEstimatedMinutes] = useState('');
-
+  const [editEstimatedHours, setEditEstimatedHours] = useState('');
+  const [hoursToday, setHoursToday] = useState('');
+  const [activityParent, setActivityParent] = useState(null);
+  
   const loadData = useCallback(async () => {
     // Hide any open modals to prevent backdrop issues
     const modal = document.getElementById('modalSubtarea');
@@ -48,14 +54,16 @@ export default function ActividadDetalle() {
       setLoading(true);
       const act = await getActivity(id);
       const subs = await getSubtasks(id);
+      setHoursToday(await getTimeToDate({ date: act.due_date }));
       setActividad(act);
       setSubtasks(subs);
       // Initialize edit states
+      setActivityParent(act.parent || null);
       setEditTitle(act.title || '');
       setEditDescription(act.description || '');
       setEditDueDate(act.due_date || '');
       setEditPriority(act.priority_display || '');
-      setEditEstimatedMinutes(act.duracionMin || '');
+      setEditEstimatedHours(act.durationHours || '');
       setError(null);
     } catch (err) {
       console.error(err);
@@ -64,18 +72,18 @@ export default function ActividadDetalle() {
       setLoading(false);
     }
   }, [id]);
-
+  
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // (El código anterior que añadía el listener de focus fue eliminado para evitar recargas múltiples)
 
+  // (El código anterior que añadía el listener de focus fue eliminado para evitar recargas múltiples)
   const handleCreateSubtask = async (e) => {
     e.preventDefault();
-    setFieldErrors({ title: '', description: '', minutos: '' });
+    setFieldErrors({ title: '', description: '', horas: '' });
 
-    const newFieldErrors = { title: '', description: '', minutos: '' };
+    const newFieldErrors = { title: '', description: '', horas: '' };
     let hasErrors = false;
 
     if (!newTitle.trim()) {
@@ -88,8 +96,8 @@ export default function ActividadDetalle() {
       hasErrors = true;
     }
 
-    if (!newMinutos || isNaN(Number(newMinutos)) || Number(newMinutos) <= 0) {
-      newFieldErrors.minutos = 'Los minutos estimados son obligatorios y deben ser mayor a 0';
+    if (!newHours || isNaN(Number(newHours)) || Number(newHours) <= 0 || Number(newHours) > user.max_horas_day) {
+      newFieldErrors.horas = `Las horas estimadas son obligatorias, deben ser mayor a 0 y menores o iguales a ${user.max_horas_day}`;
       hasErrors = true;
     }
 
@@ -98,24 +106,83 @@ export default function ActividadDetalle() {
       return;
     }
 
+    const totalHours = Number(hoursToday.total_hours) + Number(newHours);
+    if (totalHours > user.max_horas_day) {
+      const usedHours = hoursToday.total_hours;
+      const remaining = user.max_horas_day - usedHours ;
+      const showIncreaseOption = totalHours <= 24;
+      const showChangeOption = remaining > 0;
+      const result = await Swal.fire({
+        title: 'Conflicto de tiempo diario',
+        html: `La suma de horas estimadas (${totalHours}) supera el límite diario de ${user.max_horas_day} horas.<br>Tiempo restante disponible: ${remaining} horas.${!showIncreaseOption ? '<br><strong>Nota: El tiempo necesario supera las 24 horas, no se puede aumentar el límite diario.</strong>' : ''}${!showChangeOption ? '<br><strong>No hay tiempo disponible para hoy, no se puede ajustar el tiempo estimado.</strong>' : ''}`,
+        showCancelButton: showIncreaseOption,
+        confirmButtonText: showChangeOption ? 'Cambiar tiempo estimado al máximo disponible' : 0,
+        cancelButtonText: showIncreaseOption ? 'Aumentar tiempo diario' : 0,
+        showConfirmButton: showChangeOption,
+        showDenyButton: true,
+        denyButtonText: 'Cancelar'
+      });
+      if (result.isConfirmed && showChangeOption) {
+        setNewHours(remaining.toString());
+        setFieldErrors({ ...fieldErrors, horas: '' });
+        return;
+      } else if (result.dismiss === Swal.DismissReason.cancel && showIncreaseOption) {
+        const { value: newLimit } = await Swal.fire({
+          title: 'Aumentar límite diario',
+          input: 'number',
+          inputLabel: `Nuevo límite de horas por día (mínimo ${totalHours})`,
+          inputValue: totalHours,
+          inputAttributes: {
+            min: totalHours,
+            step: 0.5
+          },
+          showCancelButton: true,
+          inputValidator: (value) => {
+            if (!value || value < totalHours) {
+              return `El nuevo límite debe ser al menos ${totalHours}`;
+            }
+            if (value > 24) {
+              return 'El límite diario no puede superar las 24 horas';
+            }
+          }
+        });
+        if (newLimit) {
+          try {
+            const token = localStorage.getItem('token');
+            const updated = await updateProfileRequest(token, { max_horas_day: Number(newLimit) });
+            updateUserContext(updated.data);
+          } catch (err) {
+            console.error(err);
+            setError('Error al actualizar límite diario');
+            return;
+          }
+        } else {
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+
     setCreating(true);
     try {
-      const user = JSON.parse(localStorage.getItem('user')) || { id: 1 }; // Assuming user is stored in localStorage
+      const userId = user.id;
       const payload = {
         title: newTitle,
         description: newDescription,
         priority: actividad.priority, // inherit from parent
         due_date: actividad.due_date, // inherit from parent
-        duration: Number(newMinutos),
-        user: user.id,
+        duration: Number(newHours),
+        user: userId,
         parent: actividad.id // define as subtask
       };
       const created = await createActivity(payload);
       setSubtasks([...subtasks, created]);
       setNewTitle('');
       setNewDescription('');
-      setNewMinutos('');
+      setNewHours('');
       setSuccessMessage('✓ Subtarea creada exitosamente');
+      setHoursToday(await getTimeToDate({ date: actividad.due_date }));
       setHighlightedSubtaskId(created.id);
       // Close modal
       const modal = document.getElementById('modalSubtarea');
@@ -160,7 +227,7 @@ export default function ActividadDetalle() {
     setEditDescription(actividad.description || '');
     setEditDueDate(actividad.due_date || '');
     setEditPriority(actividad.priority_display || '');
-    setEditEstimatedMinutes(actividad.duracionMin || '');
+    setEditEstimatedHours(actividad.duracionHoras || '');
   };
 
   const handleSaveEdit = async () => {
@@ -170,13 +237,26 @@ export default function ActividadDetalle() {
         description: editDescription,
         due_date: editDueDate,
         priority_display: editPriority,
-        duracionMin: Number(editEstimatedMinutes),
+        duracionHoras: Number(editEstimatedHours),
       };
       const updated = await updateActivity(id, payload);
       setActividad(updated);
       setIsEditing(false);
       setSuccessMessage('Actividad actualizada correctamente');
       setTimeout(() => setSuccessMessage(null), 3000);
+
+      // Si la fecha cambió, actualizar las subactividades
+      if (editDueDate !== actividad.due_date) {
+        const updatePromises = subtasks.map(subtask => updateActivity(subtask.id, { due_date: editDueDate }));
+        try {
+          await Promise.all(updatePromises);
+          setSubtasks(prev => prev.map(s => ({ ...s, due_date: editDueDate })));
+        } catch (err) {
+          console.error('Error al actualizar fechas de subactividades', err);
+          setError('Error al actualizar fechas de subactividades');
+          setTimeout(() => setError(null), 4000);
+        }
+      }
     } catch (err) {
       console.error(err);
       setError('Error al actualizar actividad');
@@ -224,6 +304,7 @@ export default function ActividadDetalle() {
         timer: 2000,
         showConfirmButton: false
       });
+      setHoursToday(await getTimeToDate({ date: actividad.due_date }));
     } catch (err) {
       Swal.fire({
         icon: "error",
@@ -259,7 +340,7 @@ export default function ActividadDetalle() {
       </div>
     );
   }
-
+  
   return (
     <div className="container mt-4">
       {/* Header */}
@@ -313,7 +394,9 @@ export default function ActividadDetalle() {
             placeholder="Descripción"
             rows="3"
           />
+          
           <div className="row g-2">
+            {activityParent === null && (
             <div className="col-md-3">
               <label className="form-label">Fecha límite</label>
               <input
@@ -322,8 +405,9 @@ export default function ActividadDetalle() {
                 value={editDueDate}
                 onChange={(e) => setEditDueDate(e.target.value)}
               />
-            </div>
-            <div className="col-md-3">
+            </div>) }
+            {activityParent === null &&
+            (<div className="col-md-3">
               <label className="form-label">Prioridad</label>
               <select
                 className="form-select"
@@ -333,19 +417,19 @@ export default function ActividadDetalle() {
                 <option value="baja">Baja</option>
                 <option value="media">Media</option>
                 <option value="alta">Alta</option>
-                <option value="urgente">Urgente</option>
               </select>
-            </div>
+            </div>)}
+            {activityParent !== null && (
             <div className="col-md-3">
-              <label className="form-label">Minutos estimados</label>
+              <label className="form-label">Horas estimadas</label>
               <input
                 type="number"
                 className="form-control"
-                value={editEstimatedMinutes}
-                onChange={(e) => setEditEstimatedMinutes(e.target.value)}
+                value={editEstimatedHours}
+                onChange={(e) => setEditEstimatedHours(e.target.value)}
                 min="1"
               />
-            </div>
+            </div>)}
           </div>
         </div>
       ) : (
@@ -399,6 +483,7 @@ export default function ActividadDetalle() {
       </div>
 
       {/* Subtasks Section */}
+      {activityParent === null && (
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h5>Subtareas</h5>
         <button
@@ -408,9 +493,9 @@ export default function ActividadDetalle() {
         >
           + Agregar Subtarea
         </button>
-      </div>
-
-      {subtasks.length === 0 ? (
+      </div>)}
+      {activityParent === null && (
+      subtasks.length === 0 ? (
         <p className="text-muted">
           No hay subtareas para esta actividad.
           Si deseas crear una haz click en <b>Agregar subtarea</b>.
@@ -428,15 +513,17 @@ export default function ActividadDetalle() {
                   checked={sub.status_id === 3}
                   onChange={() => handleToggle(sub)}
                 />
-                <span className={sub.status_id === 3 ? "text-decoration-line-through" : ""}>
+                  <Link to={`/actividad/${sub.id}`} className="text-decoration-none">
+                <span className={sub.status_id === 3 ? "text-decoration-line-through" : ""} 
+                      style={{ cursor: "pointer", color: "#0d6efd" }}>
                   {sub.title}
-                </span>
+                </span> </Link>
                 {sub.description && (
                   <small className="text-muted ms-2">{sub.description}</small>
                 )}
                 {sub.duration && (
                   <span className="badge bg-secondary ms-2">
-                    ⏱️ {sub.duration}min
+                    ⏱️ {sub.duration} Hr
                   </span>
                 )}
               </div>
@@ -448,7 +535,7 @@ export default function ActividadDetalle() {
             </div>
           </div>
         ))
-      )}
+      ))}
 
       {/* Modal for creating subtask */}
       <div className="modal fade" id="modalSubtarea" tabIndex="-1">
@@ -499,27 +586,27 @@ export default function ActividadDetalle() {
                   )}
                 </div>
                 <div className="mb-3">
-                  <label className="form-label">Minutos Estimados *</label>
+                  <label className="form-label">Horas Estimadas *</label>
                   <input
                     type="number"
-                    className={`form-control ${fieldErrors.minutos ? 'is-invalid' : ''}`}
-                    placeholder="Ejemplo: 30"
-                    value={newMinutos}
+                    className={`form-control ${fieldErrors.horas ? 'is-invalid' : ''}`}
+                    placeholder="Ejemplo: 1"
+                    value={newHours}
                     onChange={(e) => {
-                      setNewMinutos(e.target.value);
-                      setFieldErrors(prev => ({ ...prev, minutos: '' }));
+                      setNewHours(e.target.value);
+                      setFieldErrors(prev => ({ ...prev, horas: '' }));
                     }}
                     disabled={creating}
                     step="1"
                     min="0"
                   />
-                  {fieldErrors.minutos && (
+                  {fieldErrors.horas && (
                     <div className="invalid-feedback" style={{ display: 'block' }}>
-                      {fieldErrors.minutos}
+                      {fieldErrors.horas}
                     </div>
                   )}
-                  {!fieldErrors.minutos && (
-                    <small className="form-text text-muted">Estima cuántos minutos dedicarás a esta subtarea</small>
+                  {!fieldErrors.horas && (
+                    <small className="form-text text-muted">Estima cuántas horas dedicarás a esta subtarea</small>
                   )}
                 </div>
               </div>
@@ -538,3 +625,4 @@ export default function ActividadDetalle() {
     </div>
   );
 }
+

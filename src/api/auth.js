@@ -58,3 +58,22 @@ export async function registerRequest(payload) {
 
   return data
 }
+
+export async function updateProfileRequest(token, payload) {
+  const res = await fetch(`${API}me/`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Token ${token}`
+    },
+    body: JSON.stringify(payload)
+  })
+
+  const data = await res.json()
+
+  if (!res.ok) {
+    throw data
+  }
+
+  return data
+}

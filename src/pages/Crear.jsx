@@ -10,7 +10,7 @@ export default function Crear() {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [date, setDate] = useState("")
-  const [durationMin, setDurationMin] = useState("")
+  const [durationHours, setDurationHours] = useState("")
   const [priority, setPriority] = useState("1")
   const [errors, setErrors] = useState({})
   const [priorityMssg, setPriorityMsg] = useState("")
@@ -48,7 +48,7 @@ export default function Crear() {
       title,
       description,
       date,
-      durationMin
+      durationHours
     })
 
     setErrors(newErrors)
