@@ -96,8 +96,8 @@ export default function ActividadDetalle() {
       hasErrors = true;
     }
 
-    if (!newHours || isNaN(Number(newHours)) || Number(newHours) <= 0 || Number(newHours) >= user.max_horas_day) {
-      newFieldErrors.horas = `Las horas estimadas son obligatorias, deben ser mayor a 0 y menores que ${user.max_horas_day}`;
+    if (!newHours || isNaN(Number(newHours)) || Number(newHours) <= 0 || Number(newHours) > user.max_horas_day) {
+      newFieldErrors.horas = `Las horas estimadas son obligatorias, deben ser mayor a 0 y menores o iguales a ${user.max_horas_day}`;
       hasErrors = true;
     }
 
@@ -107,24 +107,26 @@ export default function ActividadDetalle() {
     }
 
     const totalHours = Number(hoursToday.total_hours) + Number(newHours);
-    console.log("test", totalHours);
     if (totalHours > user.max_horas_day) {
       const usedHours = hoursToday.total_hours;
-      const remaining = user.max_horas_day - usedHours;
+      const remaining = user.max_horas_day - usedHours ;
+      const showIncreaseOption = totalHours <= 24;
+      const showChangeOption = remaining > 0;
       const result = await Swal.fire({
         title: 'Conflicto de tiempo diario',
-        html: `La suma de horas estimadas (${totalHours}) supera el límite diario de ${user.max_daily_hours} horas.<br>Tiempo restante disponible: ${remaining} horas.`,
-        showCancelButton: true,
-        confirmButtonText: 'Cambiar tiempo estimado al máximo disponible',
-        cancelButtonText: 'Aumentar tiempo diario',
+        html: `La suma de horas estimadas (${totalHours}) supera el límite diario de ${user.max_horas_day} horas.<br>Tiempo restante disponible: ${remaining} horas.${!showIncreaseOption ? '<br><strong>Nota: El tiempo necesario supera las 24 horas, no se puede aumentar el límite diario.</strong>' : ''}${!showChangeOption ? '<br><strong>No hay tiempo disponible para hoy, no se puede ajustar el tiempo estimado.</strong>' : ''}`,
+        showCancelButton: showIncreaseOption,
+        confirmButtonText: showChangeOption ? 'Cambiar tiempo estimado al máximo disponible' : 0,
+        cancelButtonText: showIncreaseOption ? 'Aumentar tiempo diario' : 0,
+        showConfirmButton: showChangeOption,
         showDenyButton: true,
         denyButtonText: 'Cancelar'
       });
-      if (result.isConfirmed) {
+      if (result.isConfirmed && showChangeOption) {
         setNewHours(remaining.toString());
         setFieldErrors({ ...fieldErrors, horas: '' });
         return;
-      } else if (result.dismiss === Swal.DismissReason.cancel) {
+      } else if (result.dismiss === Swal.DismissReason.cancel && showIncreaseOption) {
         const { value: newLimit } = await Swal.fire({
           title: 'Aumentar límite diario',
           input: 'number',
@@ -139,12 +141,15 @@ export default function ActividadDetalle() {
             if (!value || value < totalHours) {
               return `El nuevo límite debe ser al menos ${totalHours}`;
             }
+            if (value > 24) {
+              return 'El límite diario no puede superar las 24 horas';
+            }
           }
         });
         if (newLimit) {
           try {
             const token = localStorage.getItem('token');
-            const updated = await updateProfileRequest(token, { max_daily_hours: Number(newLimit) });
+            const updated = await updateProfileRequest(token, { max_horas_day: Number(newLimit) });
             updateUserContext(updated.data);
           } catch (err) {
             console.error(err);
@@ -177,6 +182,7 @@ export default function ActividadDetalle() {
       setNewDescription('');
       setNewHours('');
       setSuccessMessage('✓ Subtarea creada exitosamente');
+      setHoursToday(await getTimeToDate({ date: actividad.due_date }));
       setHighlightedSubtaskId(created.id);
       // Close modal
       const modal = document.getElementById('modalSubtarea');
