@@ -129,7 +129,6 @@ export default function ActividadDetalle() {
   useEffect(() => {
     if (actividad && subtasks && user) {
       const totalHours = (actividad.durationHours || 0) + subtasks.reduce((sum, s) => sum + (Number(s.duration || 0)), 0);
-      console.log(totalHours)
       if (totalHours > user.max_horas_day) {
         setWarningMessage(`Advertencia: Esta actividad supera el límite diario de ${user.max_horas_day} horas (total: ${totalHours} horas).`);
       } else {
