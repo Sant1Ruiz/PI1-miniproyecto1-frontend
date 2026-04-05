@@ -222,3 +222,11 @@ h2 {
   line-height: 1;
   font-weight: 800;
 }
+
+.sidebar-collapsed .nav-link span {
+  display: none;
+}
+
+.sidebar-collapsed .nav-link {
+  text-align: center;
+}

@@ -22,24 +22,70 @@ export default function App() {
   const { token } = useAuth();
 
   return (
-    <div className="container">
+    <div className="container-fluid">
+      <div className="row">
+        <div className="col-lg-2 d-none d-lg-block vh-100 px-5 pt-5 bg-light">
       {!enPortada && (
         <>
-          <div className="app-header">
+          <div className="app-header d-flex justify-content-between align-items-center">
             <h1 className="app-title">Activivalles</h1>
+
+            {/* Botón hamburguesa */}
+            <button
+              className="btn btn-outline-primary d-lg-none"
+              type="button"
+              data-bs-toggle="offcanvas"
+              data-bs-target="#sidebar"
+            >
+              ☰
+            </button>
           </div>
 
-          <nav className="navbar">
-            <Link to="/hoy">Hoy</Link>
-            <Link to="/crear">Crear</Link>
-            <Link to="/progreso">Progreso</Link>
-            <Link to="/actividades">Actividades</Link>
-            <Link to="/perfil">Mi Perfil</Link>
-            {token && <LogoutButton />}
-          </nav>
+          {/* Sidebar */}
+          <div
+            className="offcanvas-lg offcanvas-start"
+            tabIndex="-1"
+            id="sidebar"
+          >
+            <div className="offcanvas-header">
+              <h5 className="offcanvas-title">Menú</h5>
+              <button
+                type="button"
+                className="btn-close"
+                data-bs-dismiss="offcanvas"
+              ></button>
+            </div>
+            <div className="offcanvas-body p-0">
+              <nav className="nav flex-column">
+
+                <Link className="nav-link" to="/hoy">
+                  <i className="bi bi-calendar-day me-2"></i> Hoy
+                </Link>
+
+                <Link className="nav-link" to="/crear">
+                  <i className="bi bi-plus-circle me-2"></i> Crear
+                </Link>
+
+                <Link className="nav-link" to="/progreso">
+                  <i className="bi bi-graph-up me-2"></i> Progreso
+                </Link>
+
+                <Link className="nav-link" to="/actividades">
+                  <i className="bi bi-list-task me-2"></i> Actividades
+                </Link>
+
+                <Link className="nav-link" to="/perfil">
+                  <i className="bi bi-person me-2"></i> Perfil
+                </Link>
+
+                {token && <LogoutButton />}
+              </nav>
+            </div>
+          </div>
         </>
       )}
-
+      </div>
+      <div className="col-lg-10 mt-5 px-5">
       <Routes>
         <Route path="/register" 
           element={ 
@@ -67,6 +113,8 @@ export default function App() {
 
         <Route path="*" element={<NotFound />} />
       </Routes>
+      </div>
+      </div>
     </div>
   );
 }
