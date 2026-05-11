@@ -11,8 +11,8 @@ export function getPriorityBadge(priority) {
   }
 }
 
-export function getStatusBadge(priority) {
-  switch (priority?.toLowerCase()) {
+export function getStatusBadge(status) {
+  switch (status?.toLowerCase()) {
     case "pendiente":
       return "secondary";
     case "en progreso":
@@ -21,6 +21,8 @@ export function getStatusBadge(priority) {
       return "success";
     case "cancelada":
       return "danger";
+    case "pospuesta":
+      return "info";
     default:
       return "secondary";
   }

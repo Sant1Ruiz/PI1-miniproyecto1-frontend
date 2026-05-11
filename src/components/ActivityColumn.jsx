@@ -1,38 +1,25 @@
-import ActivityCard from "../components/ActivityCard";
 export default function ActivityColumn({
   title,
-  subtitle,
   activities,
   emptyText,
   bg,
   border,
-  getPriorityBadge,
-  formatDate,
-  deleteActivity
+  renderCard,
 }) {
-
   return (
-  <div className="col-xl-4">
-    <div className={`card ${bg} border ${border}`}>
-      <h4>{title}</h4>
-      <p className="text-muted mb-0">{activities.length} {subtitle}</p>
+    <div className="col-xl-4">
+      <div className={`card ${bg} border ${border} p-3`}>
+        <h5 className="mb-0">{title}</h5>
+        <p className="text-muted small mb-3">{activities.length} tarea(s)</p>
 
-      {activities.length === 0 ? (
-        <div className="muted">{emptyText}</div>
-      ) : (
-        <div className="row">
-          {activities.map((a) => (
-            <ActivityCard
-              key={a.id}
-              activity={a}
-              deleteActivity={deleteActivity}
-              getPriorityBadge={getPriorityBadge}
-              formatDate={formatDate}
-            />
-          ))}
-        </div>
-      )}
+        {activities.length === 0 ? (
+          <div className="text-muted">{emptyText}</div>
+        ) : (
+          <div className="d-flex flex-column gap-2">
+            {activities.map(renderCard)}
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-)
+  );
 }
