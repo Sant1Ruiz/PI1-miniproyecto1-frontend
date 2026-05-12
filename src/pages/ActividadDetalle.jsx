@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, act, Activity } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { Modal } from "bootstrap";
 import { getPriorityBadge, formatDate, getStatusBadge } from "../utils/activityUtils";
 import {
@@ -44,6 +44,8 @@ function formatPriorityForInput(activity) {
 
 export default function ActividadDetalle() {
   const { id } = useParams();
+  const location = useLocation();
+  const backTo = location.state?.from ?? "/hoy";
   const { user, updateUserContext } = useAuth();
   const [actividad, setActividad] = useState(null);
   const [subtasks, setSubtasks] = useState([]);
@@ -59,9 +61,10 @@ export default function ActividadDetalle() {
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newHours, setNewHours] = useState('');
+  const [newTaskDate, setNewTaskDate] = useState('');
   const [creating, setCreating] = useState(false);
   const [validationError, setValidationError] = useState(null);
-  const [fieldErrors, setFieldErrors] = useState({ title: '', description: '', horas: '' });
+  const [fieldErrors, setFieldErrors] = useState({ title: '', description: '', horas: '', fecha: '' });
   
   // Edit states for main activity
   const [isEditing, setIsEditing] = useState(false);
@@ -103,6 +106,7 @@ export default function ActividadDetalle() {
       setEditDueDate(formatDateForInput(act.due_date));
       setEditPriority(formatPriorityForInput(act));
       setEditEstimatedHours(act.durationHours || act.duracionHoras || act.duration || '');
+      setNewTaskDate(formatDateForInput(act.due_date));
 
       const [subsResult, hoursResult] = await Promise.allSettled([
         getSubtasks(id),
@@ -137,12 +141,14 @@ export default function ActividadDetalle() {
     loadData();
   }, [loadData]);
 
-  // Check for exceeding daily limit
+  // Check for exceeding daily limit — only pending subtasks count
   useEffect(() => {
     if (actividad && subtasks && user) {
-      const totalHours = (actividad.durationHours || 0) + subtasks.reduce((sum, s) => sum + (Number(s.duration || 0)), 0);
-      if (totalHours > user.max_horas_day) {
-        setWarningMessage(`Advertencia: Esta actividad supera el límite diario de ${user.max_horas_day} horas (total: ${totalHours} horas).`);
+      const pendingHours = subtasks
+        .filter(s => s.status_id !== 3)
+        .reduce((sum, s) => sum + (Number(s.duration) || 0), 0);
+      if (pendingHours > user.max_horas_day) {
+        setWarningMessage(`Advertencia: Las subtareas pendientes suman ${pendingHours}h, superando el límite diario de ${user.max_horas_day}h.`);
       } else {
         setWarningMessage(null);
       }
@@ -153,9 +159,9 @@ export default function ActividadDetalle() {
   // (El código anterior que añadía el listener de focus fue eliminado para evitar recargas múltiples)
   const handleCreateSubtask = async (e) => {
     e.preventDefault();
-    setFieldErrors({ title: '', description: '', horas: '' });
+    setFieldErrors({ title: '', description: '', horas: '', fecha: '' });
 
-    const newFieldErrors = { title: '', description: '', horas: '' };
+    const newFieldErrors = { title: '', description: '', horas: '', fecha: '' };
     let hasErrors = false;
 
     if (!newTitle.trim()) {
@@ -166,6 +172,17 @@ export default function ActividadDetalle() {
     if (!newDescription.trim()) {
       newFieldErrors.description = 'La descripción es obligatoria';
       hasErrors = true;
+    }
+
+    if (!newTaskDate) {
+      newFieldErrors.fecha = 'La fecha de ejecución es obligatoria';
+      hasErrors = true;
+    } else {
+      const parentMax = actividad?.due_date ? formatDateForInput(actividad.due_date) : null;
+      if (parentMax && newTaskDate > parentMax) {
+        newFieldErrors.fecha = `La fecha no puede ser posterior a la fecha límite de la actividad (${formatDate(actividad.due_date)})`;
+        hasErrors = true;
+      }
     }
 
     if (!newHours || isNaN(Number(newHours)) || Number(newHours) <= 0 || Number(newHours) > user.max_horas_day) {
@@ -242,17 +259,18 @@ export default function ActividadDetalle() {
       const payload = {
         title: newTitle,
         description: newDescription,
-        priority: actividad.priority, // inherit from parent
-        due_date: actividad.due_date, // inherit from parent
+        priority_id: actividad.priority_id,
+        due_date: newTaskDate ? `${newTaskDate}T00:00:00Z` : actividad.due_date,
         duration: Number(newHours),
         user: userId,
-        parent: actividad.id // define as subtask
+        parent: actividad.id,
       };
       const created = await createActivity(payload);
       setSubtasks((prev) => [...prev, created]);
       setNewTitle('');
       setNewDescription('');
       setNewHours('');
+      setNewTaskDate(formatDateForInput(actividad.due_date));
       setError(null);
       closeSubtaskModal();
       setSuccessMessage('✓ Subtarea creada exitosamente');
@@ -279,7 +297,18 @@ export default function ActividadDetalle() {
     try {
       const updated = await toggleCompleteActivity(actividad);
       setActividad(updated);
-      setSuccessMessage(updated.status_id === 3 ? '✓ Tarea completada' : '↻ Tarea marcada como pendiente');
+
+      if (activityParent === null && updated.status_id === 3) {
+        const pendingSubtasks = subtasks.filter(s => s.status_id !== 3);
+        if (pendingSubtasks.length > 0) {
+          await Promise.all(pendingSubtasks.map(s => updateActivity(s.id, { status_id: 3 })));
+          setSubtasks(prev => prev.map(s => ({ ...s, status_id: 3, status_display: 'Completada' })));
+        }
+        setSuccessMessage('✓ Actividad completada junto con sus subtareas');
+      } else {
+        setSuccessMessage(updated.status_id === 3 ? '✓ Tarea completada' : '↻ Tarea marcada como pendiente');
+      }
+
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       console.error(err);
@@ -402,7 +431,7 @@ export default function ActividadDetalle() {
   if (!actividad) {
     return (
       <div className="container mt-4">
-        <Link to="/hoy" className="btn btn-outline-secondary mb-3">
+        <Link to={backTo} className="btn btn-outline-secondary mb-3">
           <i className="bi bi-chevron-left me-2"></i>
           Volver
         </Link>
@@ -418,7 +447,7 @@ export default function ActividadDetalle() {
     <div className="container mt-4">
       {/* Header */}
       <div className="d-flex align-items-center mb-3">
-        <Link to="/hoy" className="me-2 text-dark">
+        <Link to={backTo} className="me-2 text-dark">
           <i className="bi bi-chevron-left"></i>
         </Link>
         {isEditing ? (
@@ -502,6 +531,22 @@ export default function ActividadDetalle() {
             </div>)}
             {activityParent !== null && (
             <div className="col-md-3">
+              <label className="form-label">Fecha de realización</label>
+              <input
+                type="date"
+                className="form-control"
+                value={editDueDate}
+                max={actividad?.parent_due_date ? formatDateForInput(actividad.parent_due_date) : undefined}
+                onChange={(e) => setEditDueDate(e.target.value)}
+              />
+              {actividad?.parent_due_date && (
+                <small className="form-text text-muted">
+                  Máximo: {formatDate(actividad.parent_due_date)}
+                </small>
+              )}
+            </div>)}
+            {activityParent !== null && (
+            <div className="col-md-3">
               <label className="form-label">Horas estimadas</label>
               <input
                 type="number"
@@ -547,9 +592,11 @@ export default function ActividadDetalle() {
             </div>
           </div>
           <div className="col-md-4">
-            <small className="text-muted">Fecha límite</small>
+            <small className="text-muted">
+              {activityParent !== null ? "Fecha de realización" : "Fecha límite"}
+            </small>
             <div>
-              {formatDate(actividad.due_date)}
+              {actividad.due_date ? formatDate(actividad.due_date) : "—"}
             </div>
           </div>
           <div className="col-md-4">
@@ -666,6 +713,32 @@ export default function ActividadDetalle() {
                     </div>
                   )}
                 </div>
+                <div className="mb-3">
+                  <label className="form-label">Fecha de ejecución *</label>
+                  <input
+                    type="date"
+                    className={`form-control ${fieldErrors.fecha ? 'is-invalid' : ''}`}
+                    value={newTaskDate}
+                    max={actividad?.due_date ? formatDateForInput(actividad.due_date) : undefined}
+                    onChange={(e) => {
+                      setNewTaskDate(e.target.value);
+                      setFieldErrors(prev => ({ ...prev, fecha: '' }));
+                    }}
+                    disabled={creating}
+                  />
+                  {fieldErrors.fecha && (
+                    <div className="invalid-feedback" style={{ display: 'block' }}>
+                      {fieldErrors.fecha}
+                    </div>
+                  )}
+                  {!fieldErrors.fecha && (
+                    <small className="form-text text-muted">
+                      Día en que ejecutarás esta tarea
+                      {actividad?.due_date && ` · máximo ${formatDate(actividad.due_date)}`}
+                    </small>
+                  )}
+                </div>
+
                 <div className="mb-3">
                   <label className="form-label">Horas Estimadas *</label>
                   <input

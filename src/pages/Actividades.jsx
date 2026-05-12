@@ -1,364 +1,279 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { getActivities } from '../api/activities';
-import { getPriorityBadge, formatDate, getStatusBadge } from '../utils/activityUtils';
-import ActivityCard from '../components/ActivityCard';
-import Swal from 'sweetalert2';
-
-const priorityOrder = { 'alta': 3, 'media': 2, 'baja': 1 };
-
-function compareActivities(a, b) {
-  // Fecha más antiguas primero
-  const dateA = new Date(a.due_date);
-  const dateB = new Date(b.due_date);
-  if (dateA < dateB) return -1;
-  if (dateA > dateB) return 1;
-
-  // En caso de empate, por prioridad (mayor prioridad primero)
-  const priA = priorityOrder[a.priority_display?.toLowerCase()] || 0;
-  const priB = priorityOrder[b.priority_display?.toLowerCase()] || 0;
-  if (priA > priB) return -1;
-  if (priA < priB) return 1;
-
-  // Por menor tiempo estimado primero
-  if (a.duracionMin < b.duracionMin) return -1;
-  if (a.duracionMin > b.duracionMin) return 1;
-
-  // Por estatus (pendiente primero)
-  if (a.status_id === 1 && b.status_id !== 1) return -1;
-  if (a.status_id !== 1 && b.status_id === 1) return 1;
-
-  return 0;
-}
+import { useState, useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
+import { getActivities, deleteActivity as apiDelete } from "../api/activities";
+import { getPriorityBadge, getStatusBadge, formatDate } from "../utils/activityUtils";
+import Swal from "sweetalert2";
 
 export default function Actividades() {
-  const [activities, setActivities] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterPriority, setFilterPriority] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [showFilters, setShowFilters] = useState(false);
+  const [activities, setActivities]   = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [searchTerm, setSearchTerm]   = useState("");
+  const [filterPriority, setFilterPriority] = useState("all");
+  const [filterStatus, setFilterStatus]     = useState("all");
+  const [expandedIds, setExpandedIds] = useState(new Set());
 
   useEffect(() => {
-    const loadActivities = async () => {
-      try {
-        const data = await getActivities();
-        setActivities(data);
-      } catch (error) {
-        console.error('Error loading activities:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadActivities();
+    getActivities()
+      .then(setActivities)
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
 
-  const deleteActivity = async (id, title) => {
+  const main     = useMemo(() => activities.filter(a => a.parent === null), [activities]);
+  const subtasks = useMemo(() => activities.filter(a => a.parent !== null), [activities]);
+
+  const filtered = useMemo(() => {
+    return main.filter(a => {
+      const matchSearch =
+        a.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        a.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchPriority =
+        filterPriority === "all" || a.priority_display?.toLowerCase() === filterPriority;
+      const matchStatus =
+        filterStatus === "all" ||
+        (filterStatus === "pending"   && (a.status_id === 1 || a.status_id === 2)) ||
+        (filterStatus === "completed" && a.status_id === 3) ||
+        (filterStatus === "postponed" && a.status_id === 5);
+      return matchSearch && matchPriority && matchStatus;
+    });
+  }, [main, searchTerm, filterPriority, filterStatus]);
+
+  function toggle(id) {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function handleDelete(id, title) {
     const result = await Swal.fire({
       icon: "warning",
       title: "¿Eliminar actividad?",
-      html: `
-        <strong>${title}</strong><br><br>
-        Esta acción eliminará la actividad permanentemente
-        y no se puede deshacer.
-      `,
+      html: `<strong>${title}</strong><br><br>Esta acción no se puede deshacer.`,
       showCancelButton: true,
       confirmButtonText: "Eliminar",
       cancelButtonText: "Cancelar",
-      confirmButtonColor: "#d33"
+      confirmButtonColor: "#d33",
     });
-
     if (!result.isConfirmed) return;
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/activities/${id}/`, {
-        method: "DELETE",
-        headers: {
-          "Authorization": `Token ${localStorage.getItem("token")}`
-        }
-      });
-
-      if (!res.ok) throw new Error();
-
-      setActivities(prev => prev.filter(a => a.id !== id));
-
-      Swal.fire({
-        icon: "success",
-        title: "Actividad eliminada",
-        text: `"${title}" fue eliminada correctamente`,
-        timer: 2000,
-        showConfirmButton: false
-      });
-
+      await apiDelete(id);
+      setActivities(prev => prev.filter(a => a.id !== id && a.parent !== id));
+      Swal.fire({ icon: "success", title: "Eliminada", timer: 1800, showConfirmButton: false });
     } catch {
-      Swal.fire({
-        icon: "error",
-        title: "Error",
-        text: "No se pudo eliminar la actividad"
-      });
+      Swal.fire({ icon: "error", title: "Error", text: "No se pudo eliminar la actividad" });
     }
-  };
+  }
 
-  const filteredAndSortedActivities = useMemo(() => {
-    let filtered = activities.filter((activity) => {
-      const matchesSearch = activity.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        activity.description?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesPriority = filterPriority === 'all' || activity.priority_display?.toLowerCase() === filterPriority;
-      const matchesStatus = filterStatus === 'all' ||
-        (filterStatus === 'pending' && activity.status_id === 1) ||
-        (filterStatus === 'completed' && activity.status_id === 3);
-      return matchesSearch && matchesPriority && matchesStatus;
-    });
-    return filtered.sort(compareActivities);
-  }, [activities, searchTerm, filterPriority, filterStatus]);
-
-  const groupedByPriority = useMemo(() => {
-    const alta = filteredAndSortedActivities.filter(a => a.priority_display?.toLowerCase() === 'alta');
-    const media = filteredAndSortedActivities.filter(a => a.priority_display?.toLowerCase() === 'media');
-    const baja = filteredAndSortedActivities.filter(a => a.priority_display?.toLowerCase() === 'baja');
-    return { alta, media, baja };
-  }, [filteredAndSortedActivities]);
+  const hasFilters = searchTerm || filterPriority !== "all" || filterStatus !== "all";
 
   if (loading) {
     return (
-      <div className="container mt-4">
-        <div className="h-12 bg-light animate-pulse rounded" />
-        <div className="h-64 bg-light animate-pulse rounded mt-3" />
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: 300 }}>
+        <div className="spinner-border text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="container mt-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      {/* Header */}
+      <div className="d-flex justify-content-between align-items-start mb-4">
         <div>
-          <h1>Todas las Actividades</h1>
-          <p className="text-muted">Gestiona y visualiza todas tus tareas</p>
+          <h2 className="mb-1">Actividades</h2>
+          <p className="text-muted mb-0">
+            {main.length} actividades · {subtasks.length} tareas
+          </p>
         </div>
         <Link to="/crear" className="btn btn-primary">
-          <i className="bi bi-plus"></i> Crear Actividad
+          <i className="bi bi-plus-lg me-1" /> Crear actividad
         </Link>
       </div>
 
-      {/* Search and Filters */}
-      <div className="mb-4">
-        <div className="d-flex gap-3 mb-3">
-          <div className="flex-grow-1 position-relative">
-            <i className="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+      {/* Búsqueda y filtros */}
+      <div className="row g-2 mb-3">
+        <div className="col-12 col-md-5">
+          <div className="input-group">
+            <span className="input-group-text bg-white border-end-0">
+              <i className="bi bi-search text-muted" />
+            </span>
             <input
               type="text"
-              className="form-control ps-5"
+              className="form-control border-start-0"
               placeholder="Buscar actividades..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={e => setSearchTerm(e.target.value)}
             />
           </div>
-          <button
-            className={`btn ${showFilters ? 'btn-secondary' : 'btn-outline-secondary'}`}
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <i className="bi bi-sliders"></i> Filtros
-          </button>
         </div>
-
-        {showFilters && (
-          <div className="p-3 bg-light rounded">
-            <div className="row g-3">
-              <div className="col-md-6">
-                <label className="form-label">Prioridad</label>
-                <select
-                  className="form-select"
-                  value={filterPriority}
-                  onChange={(e) => setFilterPriority(e.target.value)}
-                >
-                  <option value="all">Todas</option>
-                  <option value="baja">Baja</option>
-                  <option value="media">Media</option>
-                  <option value="alta">Alta</option>
-                </select>
-              </div>
-              <div className="col-md-6">
-                <label className="form-label">Estado</label>
-                <select
-                  className="form-select"
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                >
-                  <option value="all">Todas</option>
-                  <option value="pending">Pendientes</option>
-                  <option value="completed">Completadas</option>
-                </select>
-              </div>
-            </div>
+        <div className="col-6 col-md-3">
+          <select
+            className="form-select"
+            value={filterPriority}
+            onChange={e => setFilterPriority(e.target.value)}
+          >
+            <option value="all">Toda prioridad</option>
+            <option value="alta">Alta</option>
+            <option value="media">Media</option>
+            <option value="baja">Baja</option>
+          </select>
+        </div>
+        <div className="col-6 col-md-3">
+          <select
+            className="form-select"
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value)}
+          >
+            <option value="all">Todo estado</option>
+            <option value="pending">Pendiente / En progreso</option>
+            <option value="completed">Completada</option>
+            <option value="postponed">Pospuesta</option>
+          </select>
+        </div>
+        {hasFilters && (
+          <div className="col-auto d-flex align-items-center">
+            <button
+              className="btn btn-link btn-sm text-muted p-0"
+              onClick={() => { setSearchTerm(""); setFilterPriority("all"); setFilterStatus("all"); }}
+            >
+              Limpiar
+            </button>
           </div>
         )}
       </div>
 
-      {/* Results count */}
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <p className="text-muted mb-0">
-          Mostrando {filteredAndSortedActivities.length} de {activities.length} actividades
-        </p>
-        {(searchTerm || filterPriority !== 'all' || filterStatus !== 'all') && (
-          <button
-            className="btn btn-link btn-sm"
-            onClick={() => {
-              setSearchTerm('');
-              setFilterPriority('all');
-              setFilterStatus('all');
-            }}
-          >
-            Limpiar filtros
-          </button>
-        )}
-      </div>
+      {/* Contador */}
+      <p className="text-muted small mb-3">
+        Mostrando {filtered.length} de {main.length} actividades
+      </p>
 
-      {/* Activities display */}
-      <ul className="nav nav-tabs mb-4" role="tablist">
-        <li className="nav-item" role="presentation">
-          <button className="nav-link active" id="list-tab" data-bs-toggle="tab" data-bs-target="#list" type="button" role="tab">Lista</button>
-        </li>
-        <li className="nav-item" role="presentation">
-          <button className="nav-link" id="priority-tab" data-bs-toggle="tab" data-bs-target="#priority" type="button" role="tab">Por Prioridad</button>
-        </li>
-      </ul>
-
-      <div className="tab-content">
-        <div className="tab-pane fade show active" id="list" role="tabpanel">
-          {filteredAndSortedActivities.length === 0 ? (
-            <div className="text-center py-5 bg-light rounded">
-              <p className="text-muted">No se encontraron actividades</p>
-              {(searchTerm || filterPriority !== 'all' || filterStatus !== 'all') && (
-                <button
-                  className="btn btn-link"
-                  onClick={() => {
-                    setSearchTerm('');
-                    setFilterPriority('all');
-                    setFilterStatus('all');
-                  }}
-                >
-                  Limpiar filtros
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="row g-3">
-              {filteredAndSortedActivities.map((activity) => (
-                <ActivityCard key={activity.id} activity={activity} deleteActivity={deleteActivity} getPriorityBadge={getPriorityBadge} formatDate={formatDate} />
-              ))}
-            </div>
-          )}
+      {/* Lista */}
+      {filtered.length === 0 ? (
+        <div className="text-center py-5 text-muted">
+          <i className="bi bi-inbox" style={{ fontSize: 40 }} />
+          <p className="mt-2 mb-0">No se encontraron actividades</p>
         </div>
+      ) : (
+        <div className="d-flex flex-column gap-2">
+          {filtered.map(activity => {
+            const subs     = subtasks.filter(t => t.parent === activity.id);
+            const expanded = expandedIds.has(activity.id);
+            const completed = subs.filter(t => t.status_id === 3).length;
+            const pct = subs.length === 0 ? null : Math.round((completed / subs.length) * 100);
 
-        <div className="tab-pane fade" id="priority" role="tabpanel">
-          {/* Alta */}
-          <div className="mb-4">
-            <div className="d-flex align-items-center gap-2 mb-3">
-              <div className="bg-warning rounded-circle" style={{width: '12px', height: '12px'}}></div>
-              <h4>Alta</h4>
-              <span className="text-muted">({groupedByPriority.alta.length})</span>
-            </div>
-            {groupedByPriority.alta.length === 0 ? (
-              <p className="text-muted ms-4">No hay actividades de alta prioridad</p>
-            ) : (
-              <div className="row g-3">
-                {groupedByPriority.alta.map((activity) => (
-                  <div key={activity.id} className="col-12">
-                    <div className="card">
-                      <div className="card-body">
-                        <Link to={`/actividad/${activity.id}`} className="text-decoration-none">
-                          <h5 className="card-title">{activity.title}</h5>
+            return (
+              <div key={activity.id} className="border rounded-3 bg-white overflow-hidden">
+                {/* Fila principal */}
+                <div className="d-flex align-items-center gap-2 px-3 py-2">
+                  {/* Botón expandir */}
+                  <button
+                    className="btn btn-sm btn-link p-0 text-muted flex-shrink-0"
+                    style={{ width: 24, transition: "transform 0.2s", transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}
+                    onClick={() => toggle(activity.id)}
+                    disabled={subs.length === 0}
+                    title={subs.length === 0 ? "Sin tareas" : expanded ? "Contraer" : "Expandir"}
+                  >
+                    <i className={`bi bi-chevron-right${subs.length === 0 ? " opacity-25" : ""}`} />
+                  </button>
+
+                  {/* Título */}
+                  <Link
+                    to={`/actividad/${activity.id}`} state={{ from: "/actividades" }}
+                    className={`fw-semibold text-dark text-decoration-none flex-grow-1 text-truncate${activity.status_id === 3 ? " text-decoration-line-through text-muted" : ""}`}
+                  >
+                    {activity.title}
+                  </Link>
+
+                  {/* Badges + meta */}
+                  <div className="d-none d-md-flex align-items-center gap-2 flex-shrink-0">
+                    <span className={`badge text-bg-${getPriorityBadge(activity.priority_display)}`}>
+                      {activity.priority_display}
+                    </span>
+                    <span className={`badge text-bg-${getStatusBadge(activity.status_display)}`}>
+                      {activity.status_display}
+                    </span>
+                    {activity.due_date && (
+                      <small className="text-muted text-nowrap">
+                        <i className="bi bi-calendar3 me-1" />
+                        {formatDate(activity.due_date)}
+                      </small>
+                    )}
+                    {pct !== null && (
+                      <small className="text-muted text-nowrap">
+                        {completed}/{subs.length} tareas
+                      </small>
+                    )}
+                  </div>
+
+                  {/* Acciones */}
+                  <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                    <Link
+                      to={`/actividad/${activity.id}`} state={{ from: "/actividades" }}
+                      className="btn btn-sm btn-outline-primary py-0 px-2"
+                      title="Ver detalle"
+                    >
+                      <i className="bi bi-arrow-right" />
+                    </Link>
+                    <button
+                      className="btn btn-sm btn-outline-danger py-0 px-2"
+                      title="Eliminar"
+                      onClick={() => handleDelete(activity.id, activity.title)}
+                    >
+                      <i className="bi bi-trash" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Barra de progreso inline (solo si tiene subtareas) */}
+                {pct !== null && (
+                  <div className="progress mx-3 mb-1" style={{ height: 3 }}>
+                    <div
+                      className="progress-bar bg-primary"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                )}
+
+                {/* Subtareas expandidas */}
+                {expanded && subs.length > 0 && (
+                  <div className="border-top bg-light px-3 py-2 d-flex flex-column gap-1">
+                    {subs.map(task => (
+                      <div key={task.id} className="d-flex align-items-center gap-2 py-1">
+                        <i className="bi bi-arrow-return-right text-muted flex-shrink-0" style={{ fontSize: 13 }} />
+                        <Link
+                          to={`/actividad/${activity.id}`} state={{ from: "/actividades" }}
+                          className={`flex-grow-1 small text-decoration-none text-truncate${task.status_id === 3 ? " text-muted text-decoration-line-through" : " text-dark"}`}
+                        >
+                          {task.title}
                         </Link>
-                        <p className="card-text text-muted">{activity.description}</p>
-                        <div className="d-flex gap-2">
-                          <span className={`badge bg-${getStatusBadge(activity.status_display)}`}>
-                            {activity.status_display}
+                        <div className="d-none d-sm-flex align-items-center gap-2 flex-shrink-0">
+                          <span className={`badge text-bg-${getStatusBadge(task.status_display)} small`}>
+                            {task.status_display}
                           </span>
-                          <small className="text-muted">
-                            <i className="bi bi-calendar"></i> {formatDate(activity.due_date)}
-                          </small>
+                          {task.due_date && (
+                            <small className="text-muted text-nowrap">
+                              <i className="bi bi-calendar3 me-1" />
+                              {formatDate(task.due_date)}
+                            </small>
+                          )}
+                          {task.duration && (
+                            <small className="text-muted text-nowrap">
+                              <i className="bi bi-clock me-1" />
+                              {task.duration}h
+                            </small>
+                          )}
                         </div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
-            )}
-          </div>
-
-          {/* Media */}
-          <div className="mb-4">
-            <div className="d-flex align-items-center gap-2 mb-3">
-              <div className="bg-info rounded-circle" style={{width: '12px', height: '12px'}}></div>
-              <h4>Media</h4>
-              <span className="text-muted">({groupedByPriority.media.length})</span>
-            </div>
-            {groupedByPriority.media.length === 0 ? (
-              <p className="text-muted ms-4">No hay actividades de media prioridad</p>
-            ) : (
-              <div className="row g-3">
-                {groupedByPriority.media.map((activity) => (
-                  <div key={activity.id} className="col-12">
-                    <div className="card">
-                      <div className="card-body">
-                        <Link to={`/actividad/${activity.id}`} className="text-decoration-none">
-                          <h5 className="card-title">{activity.title}</h5>
-                        </Link>
-                        <p className="card-text text-muted">{activity.description}</p>
-                        <div className="d-flex gap-2">
-                          <span className={`badge bg-${getStatusBadge(activity.status_display)}`}>
-                            {activity.status_display}
-                          </span>
-                          <small className="text-muted">
-                            <i className="bi bi-calendar"></i> {formatDate(activity.due_date)}
-                          </small>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Baja */}
-          <div className="mb-4">
-            <div className="d-flex align-items-center gap-2 mb-3">
-              <div className="bg-success rounded-circle" style={{width: '12px', height: '12px'}}></div>
-              <h4>Baja</h4>
-              <span className="text-muted">({groupedByPriority.baja.length})</span>
-            </div>
-            {groupedByPriority.baja.length === 0 ? (
-              <p className="text-muted ms-4">No hay actividades de baja prioridad</p>
-            ) : (
-              <div className="row g-3">
-                {groupedByPriority.baja.map((activity) => (
-                  <div key={activity.id} className="col-12">
-                    <div className="card">
-                      <div className="card-body">
-                        <Link to={`/actividad/${activity.id}`} className="text-decoration-none">
-                          <h5 className="card-title">{activity.title}</h5>
-                        </Link>
-                        <p className="card-text text-muted">{activity.description}</p>
-                        <div className="d-flex gap-2">
-                          <span className={`badge bg-${getStatusBadge(activity.status_display)}`}>
-                            {activity.status_display}
-                          </span>
-                          <small className="text-muted">
-                            <i className="bi bi-calendar"></i> {formatDate(activity.due_date)}
-                          </small>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+            );
+          })}
         </div>
-      </div>
+      )}
     </div>
-    
   );
-  
 }
