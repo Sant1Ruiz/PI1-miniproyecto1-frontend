@@ -7,12 +7,22 @@ import TaskCard from "../components/TaskCard";
 import { getPriorityBadge, getStatusBadge, formatDate } from "../utils/activityUtils";
 import Swal from "sweetalert2";
 import { useAuth } from "../context/AuthContext";
+import { useActivityStats } from "../context/ActivityStatsContext";
 import { getTodayInColombia } from "../utils/dateUtils";
 
 export default function Hoy() {
   const [activities, setActivities] = useState([]);
+  const [completing, setCompleting] = useState(new Set());
   const { token, user, updateUserContext } = useAuth();
+  const { refresh: refreshStats } = useActivityStats();
   const today = getTodayInColombia();
+
+  function addCompleting(id) {
+    setCompleting(prev => new Set(prev).add(id));
+  }
+  function removeCompleting(id) {
+    setCompleting(prev => { const n = new Set(prev); n.delete(id); return n; });
+  }
 
   useEffect(() => {
     if (!token) { setActivities([]); return; }
@@ -139,13 +149,59 @@ export default function Hoy() {
     }
 
     // Completar o desmarcar sin conflicto
+    if (!isUncompleting) {
+      addCompleting(task.id);
+      const anim = new Promise(r => setTimeout(r, 550));
+      try {
+        const [updated] = await Promise.all([toggleCompleteActivity(task), anim]);
+        setActivities(prev =>
+          prev.map(a => a.id === task.id ? { ...a, status_id: updated.status_id, status_display: updated.status_display } : a)
+        );
+        refreshStats();
+      } catch {
+        Swal.fire({ icon: "error", title: "Error", text: "No se pudo actualizar la tarea" });
+      } finally {
+        removeCompleting(task.id);
+      }
+    } else {
+      try {
+        const updated = await toggleCompleteActivity(task);
+        setActivities(prev =>
+          prev.map(a => a.id === task.id ? { ...a, status_id: updated.status_id, status_display: updated.status_display } : a)
+        );
+        refreshStats();
+      } catch {
+        Swal.fire({ icon: "error", title: "Error", text: "No se pudo actualizar la tarea" });
+      }
+    }
+  }
+
+  async function handleCompleteMain(activity) {
+    addCompleting(activity.id);
+    const anim = new Promise(r => setTimeout(r, 550));
     try {
-      const updated = await toggleCompleteActivity(task);
+      await Promise.all([
+        (async () => {
+          await toggleCompleteActivity(activity);
+          const pendingSubtasks = activities.filter(a => a.parent === activity.id && a.status_id !== 3);
+          if (pendingSubtasks.length > 0) {
+            await Promise.all(pendingSubtasks.map(t => updateActivity(t.id, { status_id: 3 })));
+          }
+        })(),
+        anim,
+      ]);
       setActivities(prev =>
-        prev.map(a => a.id === task.id ? { ...a, status_id: updated.status_id, status_display: updated.status_display } : a)
+        prev.map(a => {
+          if (a.id === activity.id) return { ...a, status_id: 3, status_display: "Completada" };
+          if (a.parent === activity.id) return { ...a, status_id: 3, status_display: "Completada" };
+          return a;
+        })
       );
+      refreshStats();
     } catch {
-      Swal.fire({ icon: "error", title: "Error", text: "No se pudo actualizar la tarea" });
+      Swal.fire({ icon: "error", title: "Error", text: "No se pudo completar la actividad" });
+    } finally {
+      removeCompleting(activity.id);
     }
   }
 
@@ -179,6 +235,7 @@ export default function Hoy() {
         onToggle={handleToggle}
         getPriorityBadge={getPriorityBadge}
         formatDate={formatDate}
+        isCompleting={completing.has(task.id)}
       />
     );
   }
@@ -241,6 +298,7 @@ export default function Hoy() {
             <table className="table table-hover align-middle">
               <thead className="table-light">
                 <tr>
+                  <th style={{ width: "36px" }}></th>
                   <th>Actividad</th>
                   <th className="text-nowrap">Fecha límite</th>
                   <th style={{ minWidth: "160px" }}>Progreso</th>
@@ -252,11 +310,22 @@ export default function Hoy() {
                 {activeMainActivities.map(a => {
                   const prog = getActivityProgress(a.id);
                   return (
-                    <tr key={a.id}>
+                    <tr key={a.id} className={completing.has(a.id) ? "task-completing" : ""}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          checked={false}
+                          onChange={() => handleCompleteMain(a)}
+                          style={{ cursor: "pointer" }}
+                          title="Marcar como completada"
+                        />
+                      </td>
                       <td>
                         <Link
                           to={`/actividad/${a.id}`}
-                          className="text-decoration-none fw-semibold text-dark"
+                          state={{ from: "/hoy" }}
+                          className="text-decoration-none fw-semibold text-dark task-title"
                         >
                           {a.title}
                         </Link>

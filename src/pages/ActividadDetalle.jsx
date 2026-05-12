@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, act, Activity } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { Modal } from "bootstrap";
 import { getPriorityBadge, formatDate, getStatusBadge } from "../utils/activityUtils";
 import {
@@ -44,6 +44,8 @@ function formatPriorityForInput(activity) {
 
 export default function ActividadDetalle() {
   const { id } = useParams();
+  const location = useLocation();
+  const backTo = location.state?.from ?? "/hoy";
   const { user, updateUserContext } = useAuth();
   const [actividad, setActividad] = useState(null);
   const [subtasks, setSubtasks] = useState([]);
@@ -295,7 +297,18 @@ export default function ActividadDetalle() {
     try {
       const updated = await toggleCompleteActivity(actividad);
       setActividad(updated);
-      setSuccessMessage(updated.status_id === 3 ? '✓ Tarea completada' : '↻ Tarea marcada como pendiente');
+
+      if (activityParent === null && updated.status_id === 3) {
+        const pendingSubtasks = subtasks.filter(s => s.status_id !== 3);
+        if (pendingSubtasks.length > 0) {
+          await Promise.all(pendingSubtasks.map(s => updateActivity(s.id, { status_id: 3 })));
+          setSubtasks(prev => prev.map(s => ({ ...s, status_id: 3, status_display: 'Completada' })));
+        }
+        setSuccessMessage('✓ Actividad completada junto con sus subtareas');
+      } else {
+        setSuccessMessage(updated.status_id === 3 ? '✓ Tarea completada' : '↻ Tarea marcada como pendiente');
+      }
+
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
       console.error(err);
@@ -418,7 +431,7 @@ export default function ActividadDetalle() {
   if (!actividad) {
     return (
       <div className="container mt-4">
-        <Link to="/hoy" className="btn btn-outline-secondary mb-3">
+        <Link to={backTo} className="btn btn-outline-secondary mb-3">
           <i className="bi bi-chevron-left me-2"></i>
           Volver
         </Link>
@@ -434,7 +447,7 @@ export default function ActividadDetalle() {
     <div className="container mt-4">
       {/* Header */}
       <div className="d-flex align-items-center mb-3">
-        <Link to="/hoy" className="me-2 text-dark">
+        <Link to={backTo} className="me-2 text-dark">
           <i className="bi bi-chevron-left"></i>
         </Link>
         {isEditing ? (

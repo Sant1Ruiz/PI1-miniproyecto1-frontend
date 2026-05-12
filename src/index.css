@@ -314,3 +314,18 @@ h2 {
   border-radius: 8px;
   font-weight: 500;
 }
+
+/* Task / row completion animation */
+@keyframes taskComplete {
+  0%   { opacity: 1;   transform: translateY(0); }
+  100% { opacity: 0;   transform: translateY(-6px); }
+}
+
+.task-completing {
+  animation: taskComplete 0.55s ease forwards;
+  pointer-events: none;
+}
+
+.task-completing .task-title {
+  text-decoration: line-through !important;
+}
