@@ -146,7 +146,7 @@ export default function Crear() {
                 
               </div>
               <div className="mb-3">
-                <label htmlFor="activitieDescription" className="form-label">Descripción <span className="text-danger">*</span></label>
+                <label htmlFor="activitieDescription" className="form-label">Descripción</label>
                 <textarea 
                   className={`form-control ${errors.description ? "is-invalid" : ""}`} 
                   id="activitieDescription" 
