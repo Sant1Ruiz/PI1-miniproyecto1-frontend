@@ -33,10 +33,10 @@ export default function Actividades() {
         filterStatus === "all" ||
         (filterStatus === "pending"   && (a.status_id === 1 || a.status_id === 2)) ||
         (filterStatus === "completed" && a.status_id === 3) ||
-        (filterStatus === "postponed" && a.status_id === 5);
+        (filterStatus === "postponed" && subtasks.some(s => s.parent === a.id && s.status_id === 5));
       return matchSearch && matchPriority && matchStatus;
     });
-  }, [main, searchTerm, filterPriority, filterStatus]);
+  }, [main, subtasks, searchTerm, filterPriority, filterStatus]);
 
   function toggle(id) {
     setExpandedIds(prev => {
@@ -129,7 +129,7 @@ export default function Actividades() {
             <option value="all">Todo estado</option>
             <option value="pending">Pendiente / En progreso</option>
             <option value="completed">Completada</option>
-            <option value="postponed">Pospuesta</option>
+            <option value="postponed">Con tareas pospuestas</option>
           </select>
         </div>
         {hasFilters && (

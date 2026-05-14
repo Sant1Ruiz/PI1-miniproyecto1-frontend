@@ -4,7 +4,7 @@ import { getActivities, deleteActivity as apiDeleteActivity, toggleCompleteActiv
 import { updateProfileRequest } from "../api/auth";
 import ActivityColumn from "../components/ActivityColumn";
 import TaskCard from "../components/TaskCard";
-import { getPriorityBadge, getStatusBadge, formatDate, isOverdue } from "../utils/activityUtils";
+import { getPriorityBadge, getStatusBadge, formatDate, isOverdue, parseNotes } from "../utils/activityUtils";
 import Swal from "sweetalert2";
 import { useAuth } from "../context/AuthContext";
 import { useActivityStats } from "../context/ActivityStatsContext";
@@ -33,18 +33,18 @@ export default function Hoy() {
   const tasks = activities.filter(a => a.parent !== null);
 
   const vencidas = tasks
-    .filter(t => t.due_date && t.due_date.split("T")[0] < today && t.status_id !== 3)
+    .filter(t => t.due_date && t.due_date.split("T")[0] < today && t.status_id !== 3 && t.status_id !== 5)
     .sort((a, b) =>
       a.due_date.localeCompare(b.due_date) ||
       (Number(a.duration) || 0) - (Number(b.duration) || 0)
     );
 
   const paraHoy = tasks
-    .filter(t => t.due_date && t.due_date.split("T")[0] === today && t.status_id !== 3)
+    .filter(t => t.due_date && t.due_date.split("T")[0] === today && t.status_id !== 3 && t.status_id !== 5)
     .sort((a, b) => (Number(a.duration) || 0) - (Number(b.duration) || 0));
 
   const proximas = tasks
-    .filter(t => t.due_date && t.due_date.split("T")[0] > today && t.status_id !== 3)
+    .filter(t => t.due_date && t.due_date.split("T")[0] > today && t.status_id !== 3 && t.status_id !== 5)
     .sort((a, b) =>
       a.due_date.localeCompare(b.due_date) ||
       (Number(a.duration) || 0) - (Number(b.duration) || 0)
@@ -52,12 +52,29 @@ export default function Hoy() {
 
   const activeMainActivities = mainActivities.filter(a => a.status_id !== 3);
 
-  const todayTotalHours = paraHoy.reduce((sum, t) => sum + (Number(t.duration) || 0), 0);
-  const hasConflict = !!user && todayTotalHours > user.max_horas_day;
-  const conflictTaskIds = hasConflict ? new Set(paraHoy.map(t => t.id)) : new Set();
-  const conflictActivityIds = hasConflict
-    ? new Set(paraHoy.map(t => t.parent).filter(Boolean))
-    : new Set();
+  // Detect conflicts across ALL days (not just today)
+  const allConflictDays = (() => {
+    if (!user) return [];
+    const byDate = {};
+    tasks
+      .filter(t => t.status_id !== 3 && t.status_id !== 5 && t.due_date)
+      .forEach(t => {
+        const date = t.due_date.split("T")[0];
+        if (!byDate[date]) byDate[date] = { tasks: [], totalHours: 0 };
+        byDate[date].tasks.push(t);
+        byDate[date].totalHours += Number(t.duration) || 0;
+      });
+    return Object.entries(byDate)
+      .filter(([, { totalHours }]) => totalHours > user.max_horas_day)
+      .map(([date, { tasks: dayTasks, totalHours }]) => ({ date, tasks: dayTasks, totalHours }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  })();
+
+  const hasConflict = allConflictDays.length > 0;
+  const conflictTaskIds = new Set(allConflictDays.flatMap(d => d.tasks.map(t => t.id)));
+  const conflictActivityIds = new Set(
+    allConflictDays.flatMap(d => d.tasks.map(t => t.parent).filter(Boolean))
+  );
 
   function getActivityProgress(activityId) {
     const actTasks = tasks.filter(t => t.parent === activityId);
@@ -233,6 +250,33 @@ export default function Hoy() {
     }
   }
 
+  async function handlePostpone(task) {
+    const { value: note, isConfirmed } = await Swal.fire({
+      title: 'Posponer tarea',
+      html: '<p class="mb-2 text-start small text-muted">La tarea quedará como <strong>pospuesta</strong>. Puedes agregar una nota opcional que se conservará aunque cambie el estado.</p>',
+      input: 'textarea',
+      inputPlaceholder: 'Razón de la posposición (opcional)...',
+      inputAttributes: { rows: '3', style: 'resize:none;font-size:0.9rem' },
+      showCancelButton: true,
+      confirmButtonText: 'Posponer',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#6c757d',
+    });
+    if (!isConfirmed) return;
+    try {
+      const updated = await updateActivity(task.id, {
+        status_id: 5,
+        reason: note || '',
+      });
+      setActivities(prev =>
+        prev.map(a => a.id === task.id ? updated : a)
+      );
+      refreshStats();
+    } catch {
+      Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo posponer la tarea' });
+    }
+  }
+
   function renderTask(task) {
     return (
       <TaskCard
@@ -240,6 +284,7 @@ export default function Hoy() {
         activity={task}
         deleteActivity={handleDelete}
         onToggle={handleToggle}
+        onPostpone={handlePostpone}
         getPriorityBadge={getPriorityBadge}
         formatDate={formatDate}
         isCompleting={completing.has(task.id)}
@@ -263,16 +308,26 @@ export default function Hoy() {
         </div>
       </div>
 
-      {hasConflict && (
-        <div className="alert alert-warning d-flex align-items-start gap-3 mb-4" role="alert">
-          <i className="bi bi-exclamation-triangle-fill fs-5 mt-1"></i>
-          <div>
-            <strong>Conflicto de horas detectado para hoy</strong>
-            <p className="mb-0 small mt-1">
-              Las tareas programadas para hoy suman <strong>{todayTotalHours}h</strong>, superando tu
-              límite diario de <strong>{user.max_horas_day}h</strong>. Las tareas y actividades involucradas
-              están resaltadas a continuación.
-            </p>
+      {allConflictDays.length > 0 && (
+        <div className="alert alert-warning py-2 mb-4" role="alert">
+          <div className="d-flex align-items-center gap-2 mb-1">
+            <i className="bi bi-exclamation-triangle-fill"></i>
+            <strong className="small">
+              Conflicto de horas · límite {user.max_horas_day}h/día
+            </strong>
+          </div>
+          <div className="d-flex flex-wrap gap-2">
+            {allConflictDays.map(({ date, totalHours }) => {
+              const [y, m, d] = date.split('-').map(Number);
+              const label = date === today
+                ? "Hoy"
+                : new Date(y, m - 1, d).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+              return (
+                <span key={date} className="badge bg-warning text-dark fw-normal">
+                  {label} · {totalHours}h
+                </span>
+              );
+            })}
           </div>
         </div>
       )}

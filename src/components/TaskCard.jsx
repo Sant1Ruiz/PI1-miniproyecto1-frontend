@@ -1,8 +1,9 @@
 import { Link } from "react-router-dom";
 
-export default function TaskCard({ activity, deleteActivity, onToggle, getPriorityBadge, formatDate, isCompleting, isConflict }) {
+export default function TaskCard({ activity, deleteActivity, onToggle, onPostpone, getPriorityBadge, formatDate, isCompleting, isConflict }) {
   const badge = getPriorityBadge(activity.priority_display);
   const isCompleted = activity.status_id === 3;
+  const isPostponed = activity.status_id === 5;
 
   return (
     <div
@@ -45,6 +46,17 @@ export default function TaskCard({ activity, deleteActivity, onToggle, getPriori
           {activity.parent_title ?? "Sin actividad"}
         </span>
 
+        {onPostpone && !isCompleted && !isPostponed && (
+          <button
+            className="btn btn-sm btn-outline-secondary py-0 px-2 flex-shrink-0"
+            style={{ fontSize: "0.75rem" }}
+            aria-label="Posponer tarea"
+            title="Posponer tarea"
+            onClick={() => onPostpone(activity)}
+          >
+            <i className="bi bi-pause-circle me-1" />Posponer
+          </button>
+        )}
         <i
           className="bi bi-trash text-danger flex-shrink-0"
           role="button"
@@ -82,6 +94,9 @@ export default function TaskCard({ activity, deleteActivity, onToggle, getPriori
       {/* Fila de badges */}
       <div className="d-flex align-items-center gap-2 flex-wrap px-3 pb-2 mt-1">
         <span className={`badge text-bg-${badge}`}>{activity.priority_display}</span>
+        {isPostponed && (
+          <span className="badge text-bg-info text-dark">Pospuesta</span>
+        )}
         {activity.duration && (
           <span className="badge bg-light text-dark border" style={{ fontSize: "0.72rem" }}>
             <i className="bi bi-clock me-1"></i>
@@ -93,6 +108,14 @@ export default function TaskCard({ activity, deleteActivity, onToggle, getPriori
           {activity.due_date ? formatDate(activity.due_date) : "Sin fecha"}
         </small>
       </div>
+
+      {/* Nota de posposición */}
+      {activity.notes && (
+        <div className="px-3 pb-2 small text-muted fst-italic">
+          <i className="bi bi-chat-left-text me-1" />
+          {activity.notes}
+        </div>
+      )}
     </div>
   );
 }

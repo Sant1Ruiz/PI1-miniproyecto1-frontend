@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, act, Activity } from "react";
 import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import { Modal } from "bootstrap";
-import { getPriorityBadge, formatDate, getStatusBadge } from "../utils/activityUtils";
+import { getPriorityBadge, formatDate, getStatusBadge, parseNotes } from "../utils/activityUtils";
 import {
   getActivity,
   getSubtasks,
@@ -137,9 +137,13 @@ export default function ActividadDetalle() {
 
     const modalInstance = Modal.getInstance(modalElement);
     if (modalInstance) {
-      modalInstance.dispose();
+      // hide() preserves the Bootstrap instance so it can be reopened correctly.
+      // dispose() destroys the instance entirely and causes the backdrop to appear
+      // without the modal on subsequent opens.
+      modalInstance.hide();
     }
 
+    // Immediate DOM cleanup to avoid visual blocking during Bootstrap's 300ms hide animation
     modalElement.classList.remove('show');
     modalElement.style.display = 'none';
     modalElement.removeAttribute('aria-modal');
@@ -190,7 +194,7 @@ export default function ActividadDetalle() {
 
     const byDay = {};
     subtasks
-      .filter(s => s.status_id !== 3 && s.due_date)
+      .filter(s => s.status_id !== 3 && s.status_id !== 5 && s.due_date)
       .forEach(s => {
         const day = s.due_date.split("T")[0];
         byDay[day] = (byDay[day] || 0) + (Number(s.duration) || 0);
@@ -513,6 +517,11 @@ export default function ActividadDetalle() {
       }
     }
 
+    const isReschedulingPostponed =
+      activityParent !== null &&
+      actividad.status_id === 5 &&
+      editDueDate !== formatDateForInput(actividad.due_date);
+
     try {
       const payload = {
         title: editTitle,
@@ -520,6 +529,7 @@ export default function ActividadDetalle() {
         due_date: editDueDate ? `${editDueDate}T00:00:00Z` : null,
         priority_id: editPriority ? Number(editPriority) : null,
         duration: Number(editEstimatedHours),
+        ...(isReschedulingPostponed && { status_id: 1 }),
       };
       const updated = await updateActivity(id, payload);
       setActividad(updated);
@@ -558,6 +568,72 @@ export default function ActividadDetalle() {
     } catch (err) {
       console.error(err);
       setError('Error al actualizar subtarea');
+      setTimeout(() => setError(null), 4000);
+    }
+  };
+
+  const handlePostpone = async (subtask) => {
+    const { value: noteText, isConfirmed } = await Swal.fire({
+      title: 'Posponer subtarea',
+      html: '<p class="mb-2 text-start small text-muted">La subtarea quedará como <strong>pospuesta</strong>. Puedes agregar una nota opcional que se conservará aunque cambie el estado.</p>',
+      input: 'textarea',
+      inputPlaceholder: 'Razón de la posposición (opcional)...',
+      inputAttributes: { rows: '3', style: 'resize:none;font-size:0.9rem' },
+      showCancelButton: true,
+      confirmButtonText: 'Posponer',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#6c757d',
+    });
+    if (!isConfirmed) return;
+    try {
+      const updated = await updateActivity(subtask.id, {
+        status_id: 5,
+        reason: noteText || '',
+      });
+      setSubtasks(prev =>
+        prev.map(s => s.id === subtask.id ? updated : s)
+      );
+      setSuccessMessage('Subtarea pospuesta');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error(err);
+      setError('Error al posponer subtarea');
+      setTimeout(() => setError(null), 4000);
+    }
+  };
+
+  const handleReschedule = async (subtask) => {
+    const maxDate = actividad?.due_date ? formatDateForInput(actividad.due_date) : undefined;
+    const currentDate = formatDateForInput(subtask.due_date);
+    const { value: newDate, isConfirmed } = await Swal.fire({
+      title: 'Reprogramar subtarea',
+      html: '<p class="mb-2 text-start small text-muted">Elige la nueva fecha. La subtarea volverá a estado <strong>pendiente</strong>.</p>',
+      input: 'date',
+      inputValue: currentDate,
+      inputAttributes: { ...(maxDate && { max: maxDate }) },
+      showCancelButton: true,
+      confirmButtonText: 'Reprogramar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#0d6efd',
+      inputValidator: (value) => {
+        if (!value) return 'Selecciona una fecha';
+        if (maxDate && value > maxDate) return `La fecha no puede superar la fecha límite de la actividad`;
+      },
+    });
+    if (!isConfirmed || !newDate) return;
+    try {
+      const updated = await updateActivity(subtask.id, {
+        due_date: `${newDate}T00:00:00Z`,
+        status_id: 1,
+      });
+      setSubtasks(prev =>
+        prev.map(s => s.id === subtask.id ? updated : s)
+      );
+      setSuccessMessage('Subtarea reprogramada');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error(err);
+      setError('Error al reprogramar subtarea');
       setTimeout(() => setError(null), 4000);
     }
   };
@@ -799,6 +875,38 @@ export default function ActividadDetalle() {
         </div>
       </div>
 
+      {/* Notas de posposición — solo en subtareas */}
+      {activityParent !== null && parseNotes(actividad.notes).length > 0 && (
+        <div className="mb-4">
+          <h6 className="mb-2">
+            <i className="bi bi-chat-left-text me-2 text-info" />
+            Notas de posposición
+          </h6>
+          <div className="d-flex flex-column gap-2">
+            {parseNotes(actividad.notes).map((note, idx) => (
+              <div
+                key={idx}
+                className="p-2 bg-light rounded border-start border-info border-3"
+              >
+                {note.created_at && (
+                  <small className="text-muted d-block mb-1">
+                    <i className="bi bi-clock me-1" />
+                    {new Date(note.created_at).toLocaleString('es-ES', {
+                      day: 'numeric', month: 'short', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                  </small>
+                )}
+                {note.text
+                  ? <span className="small fst-italic">{note.text}</span>
+                  : <span className="small text-muted fst-italic">Sin nota</span>
+                }
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Subtasks Section */}
       {activityParent === null && (
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -824,38 +932,74 @@ export default function ActividadDetalle() {
             className={`card mb-2 p-2 transition-all ${highlightedSubtaskId === sub.id ? 'border-success bg-light' : ''} ${sub.status_id === 3 ? 'opacity-50' : ''}`}
           >
             <div className="d-flex justify-content-between align-items-center">
-              <div className="d-flex align-items-center gap-2">
+              <div className="d-flex align-items-center gap-2 flex-wrap">
                 <input
                   type="checkbox"
                   checked={sub.status_id === 3}
                   onChange={() => handleToggle(sub)}
                 />
-                  <Link to={`/actividad/${sub.id}`} className="text-decoration-none">
-                <span className={sub.status_id === 3 ? "text-decoration-line-through" : ""} 
-                      style={{ cursor: "pointer", color: "#0d6efd" }}>
-                  {sub.title}
-                </span> </Link>
-                {sub.description && (
-                  <small className="text-muted ms-2">{sub.description}</small>
+                <Link to={`/actividad/${sub.id}`} className="text-decoration-none">
+                  <span className={sub.status_id === 3 ? "text-decoration-line-through" : ""}
+                        style={{ cursor: "pointer", color: "#0d6efd" }}>
+                    {sub.title}
+                  </span>
+                </Link>
+                {sub.status_id === 5 && (
+                  <span className="badge bg-info text-dark">Pospuesta</span>
                 )}
                 {sub.due_date && (
-                  <span className="badge bg-light text-dark border ms-2">
+                  <span className="badge bg-light text-dark border ms-1">
                     <i className="bi bi-calendar3 me-1" />
                     {formatDate(sub.due_date)}
                   </span>
                 )}
                 {sub.duration && (
-                  <span className="badge bg-secondary ms-2">
+                  <span className="badge bg-secondary ms-1">
                     <i className="bi bi-clock me-1" />{sub.duration}h
                   </span>
                 )}
               </div>
-              <i
-                className="bi bi-trash text-danger"
-                role="button"
-                onClick={() => handleDelete(sub.id, sub.title)}
-              />
+              <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                {sub.status_id !== 3 && sub.status_id !== 5 && (
+                  <button
+                    className="btn btn-sm btn-outline-secondary py-0 px-2"
+                    title="Posponer subtarea"
+                    onClick={() => handlePostpone(sub)}
+                  >
+                    <i className="bi bi-pause-circle me-1" />Posponer
+                  </button>
+                )}
+                {sub.status_id === 5 && (
+                  <button
+                    className="btn btn-sm btn-outline-primary py-0 px-2"
+                    title="Reprogramar subtarea"
+                    onClick={() => handleReschedule(sub)}
+                  >
+                    <i className="bi bi-calendar-check me-1" />Reprogramar
+                  </button>
+                )}
+                <i
+                  className="bi bi-trash text-danger"
+                  role="button"
+                  onClick={() => handleDelete(sub.id, sub.title)}
+                />
+              </div>
             </div>
+            {parseNotes(sub.notes).map((note, idx) => (
+              <div key={idx} className="mt-1 ps-4 small text-muted fst-italic d-flex align-items-start gap-1">
+                <i className="bi bi-chat-left-text flex-shrink-0 mt-1" style={{ fontSize: '0.7rem' }} />
+                <div>
+                  {note.created_at && (
+                    <span className="me-1" style={{ fontSize: '0.7rem' }}>
+                      {new Date(note.created_at).toLocaleString('es-ES', {
+                        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+                      })}:
+                    </span>
+                  )}
+                  {note.text || <em>Sin nota</em>}
+                </div>
+              </div>
+            ))}
           </div>
         ))
       ))}
