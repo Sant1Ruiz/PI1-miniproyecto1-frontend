@@ -1,11 +1,14 @@
 import { Link } from "react-router-dom";
 
-export default function TaskCard({ activity, deleteActivity, onToggle, getPriorityBadge, formatDate, isCompleting }) {
+export default function TaskCard({ activity, deleteActivity, onToggle, getPriorityBadge, formatDate, isCompleting, isConflict }) {
   const badge = getPriorityBadge(activity.priority_display);
   const isCompleted = activity.status_id === 3;
 
   return (
-    <div className={`card border-0 shadow-sm p-0${isCompleted ? " opacity-60" : ""}${isCompleting ? " task-completing" : ""}`}>
+    <div
+      className={`card shadow-sm p-0${isCompleted ? " opacity-60" : ""}${isCompleting ? " task-completing" : ""}${isConflict ? " border-warning" : " border-0"}`}
+      style={isConflict ? { borderWidth: "1px 1px 1px 4px", borderStyle: "solid" } : {}}
+    >
 
       {/* Fila superior: checkbox | chip | trash */}
       <div className="d-flex align-items-center justify-content-between px-3 pt-2 pb-1 gap-2">
@@ -17,6 +20,13 @@ export default function TaskCard({ activity, deleteActivity, onToggle, getPriori
           style={{ cursor: "pointer", marginTop: 0 }}
           aria-label="Marcar tarea como completada"
         />
+        {isConflict && (
+          <i
+            className="bi bi-exclamation-triangle-fill text-warning flex-shrink-0"
+            title="Esta tarea contribuye al conflicto de horas diarias"
+            style={{ fontSize: "0.85rem" }}
+          />
+        )}
 
         <span
           className="badge rounded-pill border fw-normal flex-grow-1 text-center"

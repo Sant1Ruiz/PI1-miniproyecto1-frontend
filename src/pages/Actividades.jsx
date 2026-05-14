@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { getActivities, deleteActivity as apiDelete } from "../api/activities";
-import { getPriorityBadge, getStatusBadge, formatDate } from "../utils/activityUtils";
+import { getPriorityBadge, getStatusBadge, formatDate, isOverdue } from "../utils/activityUtils";
 import Swal from "sweetalert2";
 
 export default function Actividades() {
@@ -194,8 +194,14 @@ export default function Actividades() {
                     <span className={`badge text-bg-${getStatusBadge(activity.status_display)}`}>
                       {activity.status_display}
                     </span>
+                    {isOverdue(activity) && (
+                      <span className="badge text-bg-danger" title="Esta actividad está vencida">
+                        <i className="bi bi-exclamation-triangle-fill me-1" />
+                        Vencida
+                      </span>
+                    )}
                     {activity.due_date && (
-                      <small className="text-muted text-nowrap">
+                      <small className={`text-nowrap ${isOverdue(activity) ? "text-danger fw-semibold" : "text-muted"}`}>
                         <i className="bi bi-calendar3 me-1" />
                         {formatDate(activity.due_date)}
                       </small>

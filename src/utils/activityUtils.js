@@ -1,3 +1,13 @@
+import { getTodayInColombia } from "./dateUtils";
+
+export function isOverdue(activity) {
+  if (!activity.due_date) return false;
+  if (activity.status_id === 3 || activity.status_id === 4) return false;
+  const today = getTodayInColombia();
+  const dueDate = activity.due_date.split("T")[0];
+  return dueDate < today;
+}
+
 export function getPriorityBadge(priority) {
   switch (priority?.toLowerCase()) {
     case "baja":

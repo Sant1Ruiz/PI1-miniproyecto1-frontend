@@ -4,7 +4,7 @@ import { getActivities, deleteActivity as apiDeleteActivity, toggleCompleteActiv
 import { updateProfileRequest } from "../api/auth";
 import ActivityColumn from "../components/ActivityColumn";
 import TaskCard from "../components/TaskCard";
-import { getPriorityBadge, getStatusBadge, formatDate } from "../utils/activityUtils";
+import { getPriorityBadge, getStatusBadge, formatDate, isOverdue } from "../utils/activityUtils";
 import Swal from "sweetalert2";
 import { useAuth } from "../context/AuthContext";
 import { useActivityStats } from "../context/ActivityStatsContext";
@@ -51,6 +51,13 @@ export default function Hoy() {
     );
 
   const activeMainActivities = mainActivities.filter(a => a.status_id !== 3);
+
+  const todayTotalHours = paraHoy.reduce((sum, t) => sum + (Number(t.duration) || 0), 0);
+  const hasConflict = !!user && todayTotalHours > user.max_horas_day;
+  const conflictTaskIds = hasConflict ? new Set(paraHoy.map(t => t.id)) : new Set();
+  const conflictActivityIds = hasConflict
+    ? new Set(paraHoy.map(t => t.parent).filter(Boolean))
+    : new Set();
 
   function getActivityProgress(activityId) {
     const actTasks = tasks.filter(t => t.parent === activityId);
@@ -236,6 +243,7 @@ export default function Hoy() {
         getPriorityBadge={getPriorityBadge}
         formatDate={formatDate}
         isCompleting={completing.has(task.id)}
+        isConflict={conflictTaskIds.has(task.id)}
       />
     );
   }
@@ -254,6 +262,20 @@ export default function Hoy() {
           <Link to="/crear" className="btn btn-primary">+ Crear actividad</Link>
         </div>
       </div>
+
+      {hasConflict && (
+        <div className="alert alert-warning d-flex align-items-start gap-3 mb-4" role="alert">
+          <i className="bi bi-exclamation-triangle-fill fs-5 mt-1"></i>
+          <div>
+            <strong>Conflicto de horas detectado para hoy</strong>
+            <p className="mb-0 small mt-1">
+              Las tareas programadas para hoy suman <strong>{todayTotalHours}h</strong>, superando tu
+              límite diario de <strong>{user.max_horas_day}h</strong>. Las tareas y actividades involucradas
+              están resaltadas a continuación.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="row g-3 mb-5">
         <ActivityColumn
@@ -310,7 +332,7 @@ export default function Hoy() {
                 {activeMainActivities.map(a => {
                   const prog = getActivityProgress(a.id);
                   return (
-                    <tr key={a.id} className={completing.has(a.id) ? "task-completing" : ""}>
+                    <tr key={a.id} className={`${completing.has(a.id) ? "task-completing" : ""} ${conflictActivityIds.has(a.id) ? "table-warning" : ""}`}>
                       <td>
                         <input
                           type="checkbox"
@@ -322,13 +344,21 @@ export default function Hoy() {
                         />
                       </td>
                       <td>
-                        <Link
-                          to={`/actividad/${a.id}`}
-                          state={{ from: "/hoy" }}
-                          className="text-decoration-none fw-semibold text-dark task-title"
-                        >
-                          {a.title}
-                        </Link>
+                        <div className="d-flex align-items-center gap-1">
+                          {conflictActivityIds.has(a.id) && (
+                            <i
+                              className="bi bi-exclamation-triangle-fill text-warning flex-shrink-0"
+                              title="Esta actividad tiene tareas en conflicto de horas para hoy"
+                            />
+                          )}
+                          <Link
+                            to={`/actividad/${a.id}`}
+                            state={{ from: "/hoy" }}
+                            className="text-decoration-none fw-semibold text-dark task-title"
+                          >
+                            {a.title}
+                          </Link>
+                        </div>
                         {a.description && (
                           <div className="text-muted small"
                             style={{
@@ -342,8 +372,18 @@ export default function Hoy() {
                           </div>
                         )}
                       </td>
-                      <td className="text-muted small text-nowrap">
-                        {a.due_date ? formatDate(a.due_date) : <span className="text-muted">—</span>}
+                      <td className="small text-nowrap">
+                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                          {isOverdue(a) && (
+                            <span className="badge text-bg-danger" title="Esta actividad está vencida">
+                              <i className="bi bi-exclamation-triangle-fill me-1" />
+                              Vencida
+                            </span>
+                          )}
+                          <span className={isOverdue(a) ? "text-danger fw-semibold" : "text-muted"}>
+                            {a.due_date ? formatDate(a.due_date) : "—"}
+                          </span>
+                        </div>
                       </td>
                       <td>
                         <div className="d-flex align-items-center gap-2">

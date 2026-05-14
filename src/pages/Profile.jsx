@@ -1,14 +1,36 @@
 import { useState, useEffect } from "react"
 import { useAuth } from "../context/AuthContext"
 import { updateProfileRequest } from "../api/auth"
+import { getActivities, updateActivity } from "../api/activities"
+import { ConflictResolutionModal } from "../components/ConflictResolutionModal"
+
+function detectConflicts(allActivities, newMax) {
+  const tasks = allActivities.filter(
+    a => a.parent !== null && a.status_id !== 3 && a.due_date
+  );
+
+  const byDate = {};
+  tasks.forEach(task => {
+    const date = task.due_date.split("T")[0];
+    if (!byDate[date]) byDate[date] = { tasks: [], totalHours: 0 };
+    byDate[date].tasks.push(task);
+    byDate[date].totalHours += Number(task.duration) || 0;
+  });
+
+  return Object.entries(byDate)
+    .filter(([, { totalHours }]) => totalHours > newMax)
+    .map(([date, { tasks, totalHours }]) => ({ date, tasks, totalHours }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
 
 function Profile() {
   const { user, token, updateUserContext } = useAuth()
-  
+
   const [name, setName] = useState("")
   const [maxHorasDay, setMaxHorasDay] = useState("")
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState({ type: "", text: "" })
+  const [conflictModal, setConflictModal] = useState(null)
 
   useEffect(() => {
     if (user) {
@@ -22,26 +44,56 @@ function Profile() {
     setLoading(true)
     setMessage({ type: "", text: "" })
 
-    try {
-      const payload = {
-        name,
-        max_horas_day: parseInt(maxHorasDay, 10)
-      }
+    const newMax = parseInt(maxHorasDay, 10)
 
+    try {
+      const payload = { name, max_horas_day: newMax }
       const response = await updateProfileRequest(token, payload)
-      
+
       if (response.success) {
         updateUserContext(response.data)
+
+        if (newMax < (user?.max_horas_day ?? 24)) {
+          const allActivities = await getActivities()
+          const conflicts = detectConflicts(allActivities, newMax)
+
+          if (conflicts.length > 0) {
+            setConflictModal({ conflicts, newMaxHoras: newMax, allActivities })
+            setLoading(false)
+            return
+          }
+        }
+
         setMessage({ type: "success", text: "¡Perfil actualizado con éxito!" })
       }
     } catch (error) {
-      setMessage({ 
-        type: "danger", 
-        text: error?.error?.message || "Ocurrió un error al actualizar el perfil" 
+      setMessage({
+        type: "danger",
+        text: error?.error?.message || "Ocurrió un error al actualizar el perfil"
       })
     } finally {
       setLoading(false)
     }
+  }
+
+  async function handleConflictResolve(changes) {
+    await Promise.all(
+      changes.map(({ taskId, action, newDuration, newDate }) => {
+        if (action === 'reduce') return updateActivity(taskId, { duration: newDuration })
+        if (action === 'move') return updateActivity(taskId, { due_date: `${newDate}T00:00:00Z` })
+        return Promise.resolve()
+      })
+    )
+    setConflictModal(null)
+    setMessage({ type: "success", text: "¡Perfil actualizado y conflictos resueltos con éxito!" })
+  }
+
+  function handleConflictClose() {
+    setConflictModal(null)
+    setMessage({
+      type: "warning",
+      text: "Perfil actualizado. Tienes conflictos de tiempo pendientes por resolver."
+    })
   }
 
   return (
@@ -100,8 +152,8 @@ function Profile() {
                   </div>
                 </div>
 
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="btn btn-primary w-100 py-2"
                   disabled={loading}
                 >
@@ -117,6 +169,17 @@ function Profile() {
           </div>
         </div>
       </div>
+
+      {conflictModal && (
+        <ConflictResolutionModal
+          show
+          conflicts={conflictModal.conflicts}
+          newMaxHoras={conflictModal.newMaxHoras}
+          allActivities={conflictModal.allActivities}
+          onSave={handleConflictResolve}
+          onClose={handleConflictClose}
+        />
+      )}
     </div>
   )
 }

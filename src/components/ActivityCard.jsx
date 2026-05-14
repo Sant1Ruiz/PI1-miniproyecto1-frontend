@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { getSubtasks } from "../api/activities";
+import { isOverdue } from "../utils/activityUtils";
 
 export default function ActivityCard({ activity, deleteActivity, getPriorityBadge, formatDate }) {
   const badge = getPriorityBadge(activity.priority_display);
@@ -60,8 +61,16 @@ export default function ActivityCard({ activity, deleteActivity, getPriorityBadg
             {activity.priority_display}
           </small>
 
-          <i className="bi bi-calendar3 mx-1"></i>
-          {formatDate(activity.due_date)}
+          {isOverdue(activity) && (
+            <span className="badge text-bg-danger ms-2 me-1" title="Esta actividad está vencida">
+              <i className="bi bi-exclamation-triangle-fill me-1" />
+              Vencida
+            </span>
+          )}
+          <i className={`bi bi-calendar3 mx-1${isOverdue(activity) ? " text-danger" : ""}`}></i>
+          <span className={isOverdue(activity) ? "text-danger fw-semibold" : ""}>
+            {formatDate(activity.due_date)}
+          </span>
 
           {/* Collapse subtasks */}
           {isMainActivity && subtasks.length > 0 && (
