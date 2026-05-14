@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react"
+import { createContext, useCallback, useContext, useState, useEffect } from "react"
 
 const AuthContext = createContext()
 
@@ -7,6 +7,25 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [token, setToken] = useState(localStorage.getItem("token"))
   const [loading, setLoading] = useState(true)
+
+  const logout = useCallback(() => {
+    localStorage.removeItem("token")
+    setToken(null)
+    setUser(null)
+  }, [])
+
+  const login = useCallback((token, user) => {
+    localStorage.setItem("token", token)
+    setToken(token)
+    setUser(user)
+  }, [])
+
+  const updateUserContext = useCallback((newUserData) => {
+    setUser(prevUser => ({
+      ...prevUser,
+      ...newUserData
+    }))
+  }, [])
 
   useEffect(() => {
 
@@ -32,26 +51,7 @@ export function AuthProvider({ children }) {
       .catch(() => logout())
       .finally(() => setLoading(false))
 
-  }, [token])
-
-  function login(token, user) {
-    localStorage.setItem("token", token)
-    setToken(token)
-    setUser(user)
-  }
-
-  function logout() {
-    localStorage.removeItem("token")
-    setToken(null)
-    setUser(null)
-  }
-
-  function updateUserContext(newUserData) {
-    setUser(prevUser => ({
-      ...prevUser,
-      ...newUserData
-    }))
-  }
+  }, [token, logout])
 
   return (
     <AuthContext.Provider value={{ user, token, loading, login, logout, updateUserContext }}>
