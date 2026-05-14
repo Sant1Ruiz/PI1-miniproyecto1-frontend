@@ -24,6 +24,32 @@ export default function Hoy() {
     setCompleting(prev => { const n = new Set(prev); n.delete(id); return n; });
   }
 
+  function showCompletedToast(title, { isMainActivity = false } = {}) {
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "success",
+      title: isMainActivity ? "¡Actividad completada!" : "¡Tarea completada!",
+      text: title,
+      showConfirmButton: false,
+      timer: 2500,
+      timerProgressBar: true,
+    });
+  }
+
+  function showPostponedToast(title) {
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "info",
+      title: "Tarea pospuesta",
+      text: title,
+      showConfirmButton: false,
+      timer: 2500,
+      timerProgressBar: true,
+    });
+  }
+
   useEffect(() => {
     if (!token) { setActivities([]); return; }
     getActivities().then(setActivities).catch(console.error);
@@ -32,25 +58,29 @@ export default function Hoy() {
   const mainActivities = activities.filter(a => a.parent === null);
   const tasks = activities.filter(a => a.parent !== null);
 
+  const byDateThenPriority = (a, b) =>
+    a.due_date.localeCompare(b.due_date) || (Number(b.priority_id) || 0) - (Number(a.priority_id) || 0);
+
   const vencidas = tasks
     .filter(t => t.due_date && t.due_date.split("T")[0] < today && t.status_id !== 3 && t.status_id !== 5)
-    .sort((a, b) =>
-      a.due_date.localeCompare(b.due_date) ||
-      (Number(a.duration) || 0) - (Number(b.duration) || 0)
-    );
+    .sort(byDateThenPriority);
 
   const paraHoy = tasks
     .filter(t => t.due_date && t.due_date.split("T")[0] === today && t.status_id !== 3 && t.status_id !== 5)
-    .sort((a, b) => (Number(a.duration) || 0) - (Number(b.duration) || 0));
+    .sort((a, b) => (Number(b.priority_id) || 0) - (Number(a.priority_id) || 0));
 
   const proximas = tasks
     .filter(t => t.due_date && t.due_date.split("T")[0] > today && t.status_id !== 3 && t.status_id !== 5)
-    .sort((a, b) =>
-      a.due_date.localeCompare(b.due_date) ||
-      (Number(a.duration) || 0) - (Number(b.duration) || 0)
-    );
+    .sort(byDateThenPriority);
 
-  const activeMainActivities = mainActivities.filter(a => a.status_id !== 3);
+  const activeMainActivities = mainActivities
+    .filter(a => a.status_id !== 3)
+    .sort((a, b) => {
+      if (!a.due_date && !b.due_date) return (Number(b.priority_id) || 0) - (Number(a.priority_id) || 0);
+      if (!a.due_date) return 1;
+      if (!b.due_date) return -1;
+      return a.due_date.localeCompare(b.due_date) || (Number(b.priority_id) || 0) - (Number(a.priority_id) || 0);
+    });
 
   // Detect conflicts across ALL days (not just today)
   const allConflictDays = (() => {
@@ -182,6 +212,7 @@ export default function Hoy() {
           prev.map(a => a.id === task.id ? { ...a, status_id: updated.status_id, status_display: updated.status_display } : a)
         );
         refreshStats();
+        if (updated.status_id === 3) showCompletedToast(task.title);
       } catch {
         Swal.fire({ icon: "error", title: "Error", text: "No se pudo actualizar la tarea" });
       } finally {
@@ -222,6 +253,7 @@ export default function Hoy() {
         })
       );
       refreshStats();
+      showCompletedToast(activity.title, { isMainActivity: true });
     } catch {
       Swal.fire({ icon: "error", title: "Error", text: "No se pudo completar la actividad" });
     } finally {
@@ -272,6 +304,7 @@ export default function Hoy() {
         prev.map(a => a.id === task.id ? updated : a)
       );
       refreshStats();
+      showPostponedToast(task.title);
     } catch {
       Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo posponer la tarea' });
     }

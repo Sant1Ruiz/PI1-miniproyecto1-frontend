@@ -10,8 +10,6 @@ export function isOverdue(activity) {
 
 export function getPriorityBadge(priority) {
   switch (priority?.toLowerCase()) {
-    case "urgente":
-      return "danger";
     case "alta":
       return "warning";
     case "media":

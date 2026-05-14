@@ -8,9 +8,6 @@ export function validateActivityForm({title, description, date, durationMin}) {
   if(title && title.length > 100)
     errors.title = "El título no puede superar 100 caracteres"
 
-  if (!description.trim())
-    errors.description = "La descripción es obligatoria"
-
   if (description && description.length > 500)
     errors.description = "La descripción no puede exceder 500 caracteres"
 

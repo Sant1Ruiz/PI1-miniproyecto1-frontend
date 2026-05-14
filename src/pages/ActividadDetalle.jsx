@@ -1,6 +1,5 @@
-import { useEffect, useState, useCallback, act, Activity } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link, useParams, useNavigate, useLocation } from "react-router-dom";
-import { Modal } from "bootstrap";
 import { getPriorityBadge, formatDate, getStatusBadge, parseNotes } from "../utils/activityUtils";
 import {
   getActivity,
@@ -88,8 +87,6 @@ function formatPriorityForInput(activity) {
       return "2";
     case "alta":
       return "3";
-    case "urgente":
-      return "4";
     default:
       return "";
   }
@@ -111,6 +108,7 @@ export default function ActividadDetalle() {
   const [warningMessage, setWarningMessage] = useState(null);
 
   // Form states for subtasks
+  const [showSubtaskModal, setShowSubtaskModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [newHours, setNewHours] = useState('');
@@ -129,30 +127,16 @@ export default function ActividadDetalle() {
   const [activityParent, setActivityParent] = useState(null);
 
   const closeSubtaskModal = useCallback(() => {
-    const modalElement = document.getElementById('modalSubtarea');
-
-    if (!modalElement) {
-      return;
-    }
-
-    const modalInstance = Modal.getInstance(modalElement);
-    if (modalInstance) {
-      // hide() preserves the Bootstrap instance so it can be reopened correctly.
-      // dispose() destroys the instance entirely and causes the backdrop to appear
-      // without the modal on subsequent opens.
-      modalInstance.hide();
-    }
-
-    // Immediate DOM cleanup to avoid visual blocking during Bootstrap's 300ms hide animation
-    modalElement.classList.remove('show');
-    modalElement.style.display = 'none';
-    modalElement.removeAttribute('aria-modal');
-    modalElement.setAttribute('aria-hidden', 'true');
-
-    document.body.classList.remove("modal-open");
-    document.body.style.removeProperty("padding-right");
-    document.querySelectorAll(".modal-backdrop").forEach((backdrop) => backdrop.remove());
+    setShowSubtaskModal(false);
   }, []);
+
+  // Lock body scroll when modal is open (mirrors Bootstrap's modal-open behavior)
+  useEffect(() => {
+    if (showSubtaskModal) {
+      document.body.classList.add('modal-open');
+      return () => document.body.classList.remove('modal-open');
+    }
+  }, [showSubtaskModal]);
   
   const loadData = useCallback(async () => {
     // Hide any open modals to prevent backdrop issues
@@ -222,11 +206,6 @@ export default function ActividadDetalle() {
 
     if (!newTitle.trim()) {
       newFieldErrors.title = 'El título es obligatorio';
-      hasErrors = true;
-    }
-
-    if (!newDescription.trim()) {
-      newFieldErrors.description = 'La descripción es obligatoria';
       hasErrors = true;
     }
 
@@ -593,8 +572,16 @@ export default function ActividadDetalle() {
       setSubtasks(prev =>
         prev.map(s => s.id === subtask.id ? updated : s)
       );
-      setSuccessMessage('Subtarea pospuesta');
-      setTimeout(() => setSuccessMessage(null), 3000);
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'info',
+        title: 'Subtarea pospuesta',
+        text: subtask.title,
+        showConfirmButton: false,
+        timer: 2500,
+        timerProgressBar: true,
+      });
     } catch (err) {
       console.error(err);
       setError('Error al posponer subtarea');
@@ -782,7 +769,6 @@ export default function ActividadDetalle() {
                 <option value="1">Baja</option>
                 <option value="2">Media</option>
                 <option value="3">Alta</option>
-                <option value="4">Urgente</option>
               </select>
             </div>)}
             {activityParent !== null && (
@@ -912,9 +898,9 @@ export default function ActividadDetalle() {
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h5>Subtareas</h5>
         <button
+          type="button"
           className="btn btn-primary btn-sm"
-          data-bs-toggle="modal"
-          data-bs-target="#modalSubtarea"
+          onClick={() => setShowSubtaskModal(true)}
         >
           + Agregar Subtarea
         </button>
@@ -1004,117 +990,141 @@ export default function ActividadDetalle() {
         ))
       ))}
 
-      {/* Modal for creating subtask */}
-      <div className="modal fade" id="modalSubtarea" tabIndex="-1">
-        <div className="modal-dialog">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">Crear Nueva Subtarea</h5>
-              <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form onSubmit={handleCreateSubtask}>
-              <div className="modal-body">
-                <div className="mb-3">
-                  <label className="form-label">Título *</label>
-                  <input
-                    type="text"
-                    className={`form-control ${fieldErrors.title ? 'is-invalid' : ''}`}
-                    placeholder="Ingresa el título de la subtarea"
-                    value={newTitle}
-                    onChange={(e) => {
-                      setNewTitle(e.target.value);
-                      setFieldErrors(prev => ({ ...prev, title: '' }));
-                    }}
+      {/* Modal for creating subtask — controlled by React state, no Bootstrap JS */}
+      {showSubtaskModal && (
+        <>
+          <div className="modal-backdrop fade show" />
+          <div
+            className="modal fade show d-block"
+            tabIndex="-1"
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !creating) closeSubtaskModal();
+            }}
+          >
+            <div className="modal-dialog">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">Crear Nueva Subtarea</h5>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    aria-label="Cerrar"
+                    onClick={closeSubtaskModal}
                     disabled={creating}
-                  />
-                  {fieldErrors.title && (
-                    <div className="invalid-feedback" style={{ display: 'block' }}>
-                      {fieldErrors.title}
-                    </div>
-                  )}
+                  ></button>
                 </div>
-                <div className="mb-3">
-                  <label className="form-label">Descripción *</label>
-                  <textarea
-                    className={`form-control ${fieldErrors.description ? 'is-invalid' : ''}`}
-                    placeholder="Ingresa una descripción detallada..."
-                    value={newDescription}
-                    onChange={(e) => {
-                      setNewDescription(e.target.value);
-                      setFieldErrors(prev => ({ ...prev, description: '' }));
-                    }}
-                    disabled={creating}
-                    rows={3}
-                  />
-                  {fieldErrors.description && (
-                    <div className="invalid-feedback" style={{ display: 'block' }}>
-                      {fieldErrors.description}
+                <form onSubmit={handleCreateSubtask}>
+                  <div className="modal-body">
+                    <div className="mb-3">
+                      <label className="form-label">Título *</label>
+                      <input
+                        type="text"
+                        className={`form-control ${fieldErrors.title ? 'is-invalid' : ''}`}
+                        placeholder="Ingresa el título de la subtarea"
+                        value={newTitle}
+                        onChange={(e) => {
+                          setNewTitle(e.target.value);
+                          setFieldErrors(prev => ({ ...prev, title: '' }));
+                        }}
+                        disabled={creating}
+                      />
+                      {fieldErrors.title && (
+                        <div className="invalid-feedback" style={{ display: 'block' }}>
+                          {fieldErrors.title}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Fecha de ejecución *</label>
-                  <input
-                    type="date"
-                    className={`form-control ${fieldErrors.fecha ? 'is-invalid' : ''}`}
-                    value={newTaskDate}
-                    max={actividad?.due_date ? formatDateForInput(actividad.due_date) : undefined}
-                    onChange={(e) => {
-                      setNewTaskDate(e.target.value);
-                      setFieldErrors(prev => ({ ...prev, fecha: '' }));
-                    }}
-                    disabled={creating}
-                  />
-                  {fieldErrors.fecha && (
-                    <div className="invalid-feedback" style={{ display: 'block' }}>
-                      {fieldErrors.fecha}
+                    <div className="mb-3">
+                      <label className="form-label">Descripción</label>
+                      <textarea
+                        className={`form-control ${fieldErrors.description ? 'is-invalid' : ''}`}
+                        placeholder="Ingresa una descripción detallada..."
+                        value={newDescription}
+                        onChange={(e) => {
+                          setNewDescription(e.target.value);
+                          setFieldErrors(prev => ({ ...prev, description: '' }));
+                        }}
+                        disabled={creating}
+                        rows={3}
+                      />
+                      {fieldErrors.description && (
+                        <div className="invalid-feedback" style={{ display: 'block' }}>
+                          {fieldErrors.description}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {!fieldErrors.fecha && (
-                    <small className="form-text text-muted">
-                      Día en que ejecutarás esta tarea
-                      {actividad?.due_date && ` · máximo ${formatDate(actividad.due_date)}`}
-                    </small>
-                  )}
-                </div>
+                    <div className="mb-3">
+                      <label className="form-label">Fecha de ejecución *</label>
+                      <input
+                        type="date"
+                        className={`form-control ${fieldErrors.fecha ? 'is-invalid' : ''}`}
+                        value={newTaskDate}
+                        max={actividad?.due_date ? formatDateForInput(actividad.due_date) : undefined}
+                        onChange={(e) => {
+                          setNewTaskDate(e.target.value);
+                          setFieldErrors(prev => ({ ...prev, fecha: '' }));
+                        }}
+                        disabled={creating}
+                      />
+                      {fieldErrors.fecha && (
+                        <div className="invalid-feedback" style={{ display: 'block' }}>
+                          {fieldErrors.fecha}
+                        </div>
+                      )}
+                      {!fieldErrors.fecha && (
+                        <small className="form-text text-muted">
+                          Día en que ejecutarás esta tarea
+                          {actividad?.due_date && ` · máximo ${formatDate(actividad.due_date)}`}
+                        </small>
+                      )}
+                    </div>
 
-                <div className="mb-3">
-                  <label className="form-label">Horas Estimadas *</label>
-                  <input
-                    type="number"
-                    className={`form-control ${fieldErrors.horas ? 'is-invalid' : ''}`}
-                    placeholder="Ejemplo: 1"
-                    value={newHours}
-                    onChange={(e) => {
-                      setNewHours(e.target.value);
-                      setFieldErrors(prev => ({ ...prev, horas: '' }));
-                    }}
-                    disabled={creating}
-                    step="1"
-                    min="0"
-                  />
-                  {fieldErrors.horas && (
-                    <div className="invalid-feedback" style={{ display: 'block' }}>
-                      {fieldErrors.horas}
+                    <div className="mb-3">
+                      <label className="form-label">Horas Estimadas *</label>
+                      <input
+                        type="number"
+                        className={`form-control ${fieldErrors.horas ? 'is-invalid' : ''}`}
+                        placeholder="Ejemplo: 1"
+                        value={newHours}
+                        onChange={(e) => {
+                          setNewHours(e.target.value);
+                          setFieldErrors(prev => ({ ...prev, horas: '' }));
+                        }}
+                        disabled={creating}
+                        step="1"
+                        min="0"
+                      />
+                      {fieldErrors.horas && (
+                        <div className="invalid-feedback" style={{ display: 'block' }}>
+                          {fieldErrors.horas}
+                        </div>
+                      )}
+                      {!fieldErrors.horas && (
+                        <small className="form-text text-muted">Estima cuántas horas dedicarás a esta subtarea</small>
+                      )}
                     </div>
-                  )}
-                  {!fieldErrors.horas && (
-                    <small className="form-text text-muted">Estima cuántas horas dedicarás a esta subtarea</small>
-                  )}
-                </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={closeSubtaskModal}
+                      disabled={creating}
+                    >
+                      Cancelar
+                    </button>
+                    <button type="submit" className="btn btn-primary" disabled={creating}>
+                      {creating ? 'Creando...' : 'Crear Subtarea'}
+                    </button>
+                  </div>
+                </form>
               </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" data-bs-dismiss="modal" disabled={creating}>
-                  Cancelar
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={creating}>
-                  {creating ? 'Creando...' : 'Crear Subtarea'}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

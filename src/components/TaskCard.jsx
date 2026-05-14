@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
+import { parseNotes } from "../utils/activityUtils";
 
 export default function TaskCard({ activity, deleteActivity, onToggle, onPostpone, getPriorityBadge, formatDate, isCompleting, isConflict }) {
   const badge = getPriorityBadge(activity.priority_display);
   const isCompleted = activity.status_id === 3;
   const isPostponed = activity.status_id === 5;
+  const latestNote = parseNotes(activity.notes)[0];
 
   return (
     <div
@@ -109,11 +111,11 @@ export default function TaskCard({ activity, deleteActivity, onToggle, onPostpon
         </small>
       </div>
 
-      {/* Nota de posposición */}
-      {activity.notes && (
+      {/* Nota de posposición (más reciente) */}
+      {latestNote?.text && (
         <div className="px-3 pb-2 small text-muted fst-italic">
           <i className="bi bi-chat-left-text me-1" />
-          {activity.notes}
+          {latestNote.text}
         </div>
       )}
     </div>

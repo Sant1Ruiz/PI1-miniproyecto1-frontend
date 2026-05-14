@@ -136,7 +136,7 @@ export default function Crear() {
                 />
                 {errors.title && (
                   <div className="invalid-feedback bg-danger-subtle p-2 rounded">
-                    <i class="bi bi-exclamation-circle me-2"></i>
+                    <i className="bi bi-exclamation-circle me-2"></i>
                     {errors.title}
                   </div>
                 )}
@@ -146,7 +146,7 @@ export default function Crear() {
                 
               </div>
               <div className="mb-3">
-                <label htmlFor="activitieDescription" className="form-label">Descripción <span className="text-danger">*</span></label>
+                <label htmlFor="activitieDescription" className="form-label">Descripción</label>
                 <textarea 
                   className={`form-control ${errors.description ? "is-invalid" : ""}`} 
                   id="activitieDescription" 
@@ -158,7 +158,7 @@ export default function Crear() {
                 </textarea>
                 {errors.description && (
                   <div className="invalid-feedback bg-danger-subtle p-2 rounded">
-                    <i class="bi bi-exclamation-circle me-2"></i>
+                    <i className="bi bi-exclamation-circle me-2"></i>
                     {errors.description}
                   </div>
                 )}
@@ -178,7 +178,7 @@ export default function Crear() {
                 />
                 {errors.date && (
                   <div className="invalid-feedback bg-danger-subtle p-2 rounded">
-                    <i class="bi bi-exclamation-circle me-2"></i>
+                    <i className="bi bi-exclamation-circle me-2"></i>
                     {errors.date}
                   </div>
                 )}
