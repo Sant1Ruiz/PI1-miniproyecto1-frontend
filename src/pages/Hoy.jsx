@@ -24,6 +24,19 @@ export default function Hoy() {
     setCompleting(prev => { const n = new Set(prev); n.delete(id); return n; });
   }
 
+  function showCompletedToast(title, { isMainActivity = false } = {}) {
+    Swal.fire({
+      toast: true,
+      position: "top-end",
+      icon: "success",
+      title: isMainActivity ? "¡Actividad completada!" : "¡Tarea completada!",
+      text: title,
+      showConfirmButton: false,
+      timer: 2500,
+      timerProgressBar: true,
+    });
+  }
+
   useEffect(() => {
     if (!token) { setActivities([]); return; }
     getActivities().then(setActivities).catch(console.error);
@@ -182,6 +195,7 @@ export default function Hoy() {
           prev.map(a => a.id === task.id ? { ...a, status_id: updated.status_id, status_display: updated.status_display } : a)
         );
         refreshStats();
+        if (updated.status_id === 3) showCompletedToast(task.title);
       } catch {
         Swal.fire({ icon: "error", title: "Error", text: "No se pudo actualizar la tarea" });
       } finally {
@@ -222,6 +236,7 @@ export default function Hoy() {
         })
       );
       refreshStats();
+      showCompletedToast(activity.title, { isMainActivity: true });
     } catch {
       Swal.fire({ icon: "error", title: "Error", text: "No se pudo completar la actividad" });
     } finally {
