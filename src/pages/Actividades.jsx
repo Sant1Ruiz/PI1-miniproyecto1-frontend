@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { getActivities, deleteActivity as apiDelete } from "../api/activities";
-import { getPriorityBadge, getStatusBadge, formatDate } from "../utils/activityUtils";
+import { getPriorityBadge, getStatusBadge, formatDate, isOverdue } from "../utils/activityUtils";
 import Swal from "sweetalert2";
 
 export default function Actividades() {
@@ -33,10 +33,10 @@ export default function Actividades() {
         filterStatus === "all" ||
         (filterStatus === "pending"   && (a.status_id === 1 || a.status_id === 2)) ||
         (filterStatus === "completed" && a.status_id === 3) ||
-        (filterStatus === "postponed" && a.status_id === 5);
+        (filterStatus === "postponed" && subtasks.some(s => s.parent === a.id && s.status_id === 5));
       return matchSearch && matchPriority && matchStatus;
     });
-  }, [main, searchTerm, filterPriority, filterStatus]);
+  }, [main, subtasks, searchTerm, filterPriority, filterStatus]);
 
   function toggle(id) {
     setExpandedIds(prev => {
@@ -129,7 +129,7 @@ export default function Actividades() {
             <option value="all">Todo estado</option>
             <option value="pending">Pendiente / En progreso</option>
             <option value="completed">Completada</option>
-            <option value="postponed">Pospuesta</option>
+            <option value="postponed">Con tareas pospuestas</option>
           </select>
         </div>
         {hasFilters && (
@@ -194,8 +194,14 @@ export default function Actividades() {
                     <span className={`badge text-bg-${getStatusBadge(activity.status_display)}`}>
                       {activity.status_display}
                     </span>
+                    {isOverdue(activity) && (
+                      <span className="badge text-bg-danger" title="Esta actividad está vencida">
+                        <i className="bi bi-exclamation-triangle-fill me-1" />
+                        Vencida
+                      </span>
+                    )}
                     {activity.due_date && (
-                      <small className="text-muted text-nowrap">
+                      <small className={`text-nowrap ${isOverdue(activity) ? "text-danger fw-semibold" : "text-muted"}`}>
                         <i className="bi bi-calendar3 me-1" />
                         {formatDate(activity.due_date)}
                       </small>
