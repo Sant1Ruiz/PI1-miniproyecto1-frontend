@@ -87,8 +87,6 @@ function formatPriorityForInput(activity) {
       return "2";
     case "alta":
       return "3";
-    case "urgente":
-      return "4";
     default:
       return "";
   }
@@ -208,11 +206,6 @@ export default function ActividadDetalle() {
 
     if (!newTitle.trim()) {
       newFieldErrors.title = 'El título es obligatorio';
-      hasErrors = true;
-    }
-
-    if (!newDescription.trim()) {
-      newFieldErrors.description = 'La descripción es obligatoria';
       hasErrors = true;
     }
 
@@ -579,8 +572,16 @@ export default function ActividadDetalle() {
       setSubtasks(prev =>
         prev.map(s => s.id === subtask.id ? updated : s)
       );
-      setSuccessMessage('Subtarea pospuesta');
-      setTimeout(() => setSuccessMessage(null), 3000);
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'info',
+        title: 'Subtarea pospuesta',
+        text: subtask.title,
+        showConfirmButton: false,
+        timer: 2500,
+        timerProgressBar: true,
+      });
     } catch (err) {
       console.error(err);
       setError('Error al posponer subtarea');
@@ -768,7 +769,6 @@ export default function ActividadDetalle() {
                 <option value="1">Baja</option>
                 <option value="2">Media</option>
                 <option value="3">Alta</option>
-                <option value="4">Urgente</option>
               </select>
             </div>)}
             {activityParent !== null && (
@@ -1037,7 +1037,7 @@ export default function ActividadDetalle() {
                       )}
                     </div>
                     <div className="mb-3">
-                      <label className="form-label">Descripción *</label>
+                      <label className="form-label">Descripción</label>
                       <textarea
                         className={`form-control ${fieldErrors.description ? 'is-invalid' : ''}`}
                         placeholder="Ingresa una descripción detallada..."
