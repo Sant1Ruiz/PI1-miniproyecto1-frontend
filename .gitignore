@@ -24,4 +24,7 @@ dist-ssr
 *.sw?
 .env
 .env.local
-
+.claude
+.agents
+SKILL.md
+skills-lock.json

@@ -1,162 +1,471 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { getActivities } from "../api/activities";
+import { getActivities, deleteActivity as apiDeleteActivity, toggleCompleteActivity, updateActivity } from "../api/activities";
+import { updateProfileRequest } from "../api/auth";
 import ActivityColumn from "../components/ActivityColumn";
-import { getPriorityBadge, formatDate } from "../utils/activityUtils";
+import TaskCard from "../components/TaskCard";
+import { getPriorityBadge, getStatusBadge, formatDate, isOverdue, parseNotes } from "../utils/activityUtils";
 import Swal from "sweetalert2";
 import { useAuth } from "../context/AuthContext";
+import { useActivityStats } from "../context/ActivityStatsContext";
 import { getTodayInColombia } from "../utils/dateUtils";
 
 export default function Hoy() {
   const [activities, setActivities] = useState([]);
-
-  const { token } = useAuth();
+  const [completing, setCompleting] = useState(new Set());
+  const { token, user, updateUserContext } = useAuth();
+  const { refresh: refreshStats } = useActivityStats();
   const today = getTodayInColombia();
-  const mainActivities = activities.filter((a)=> a.parent === null)
 
-  
+  function addCompleting(id) {
+    setCompleting(prev => new Set(prev).add(id));
+  }
+  function removeCompleting(id) {
+    setCompleting(prev => { const n = new Set(prev); n.delete(id); return n; });
+  }
+
   useEffect(() => {
-    if (!token) {
-      setActivities([]);
-      return;
-    }
-
-    getActivities()
-      .then(data => {
-        setActivities(data);
-      })
-      .catch(err => console.error(err));
+    if (!token) { setActivities([]); return; }
+    getActivities().then(setActivities).catch(console.error);
   }, [token]);
 
-  const paraHoy = mainActivities
-    .filter((a) => a.due_date?.split("T")[0] === today)
-    .sort((a, b) => a.duracionMin - b.duracionMin);
+  const mainActivities = activities.filter(a => a.parent === null);
+  const tasks = activities.filter(a => a.parent !== null);
 
-  const proximas = mainActivities
-    .filter((a) => a.due_date?.split("T")[0] > today)
-    .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.duracionMin - b.duracionMin);
+  const vencidas = tasks
+    .filter(t => t.due_date && t.due_date.split("T")[0] < today && t.status_id !== 3 && t.status_id !== 5)
+    .sort((a, b) =>
+      a.due_date.localeCompare(b.due_date) ||
+      (Number(a.duration) || 0) - (Number(b.duration) || 0)
+    );
 
-  const vencidas = mainActivities
-    .filter((a) => a.due_date?.split("T")[0] < today)
-    .sort((a, b) => a.due_date.localeCompare(b.due_date) || a.duracionMin - b.duracionMin);
+  const paraHoy = tasks
+    .filter(t => t.due_date && t.due_date.split("T")[0] === today && t.status_id !== 3 && t.status_id !== 5)
+    .sort((a, b) => (Number(a.duration) || 0) - (Number(b.duration) || 0));
 
-  async function deleteActivity(id, title) {
+  const proximas = tasks
+    .filter(t => t.due_date && t.due_date.split("T")[0] > today && t.status_id !== 3 && t.status_id !== 5)
+    .sort((a, b) =>
+      a.due_date.localeCompare(b.due_date) ||
+      (Number(a.duration) || 0) - (Number(b.duration) || 0)
+    );
 
-  const result = await Swal.fire({
-    icon: "warning",
-    title: "¿Eliminar actividad?",
-    html: `
-      <strong>${title}</strong><br><br>
-      Esta acción eliminará la actividad permanentemente
-      y no se puede deshacer.
-    `,
-    showCancelButton: true,
-    confirmButtonText: "Eliminar",
-    cancelButtonText: "Cancelar",
-    confirmButtonColor: "#d33"
-  })
+  const activeMainActivities = mainActivities.filter(a => a.status_id !== 3);
 
-  if (!result.isConfirmed) return
+  // Detect conflicts across ALL days (not just today)
+  const allConflictDays = (() => {
+    if (!user) return [];
+    const byDate = {};
+    tasks
+      .filter(t => t.status_id !== 3 && t.status_id !== 5 && t.due_date)
+      .forEach(t => {
+        const date = t.due_date.split("T")[0];
+        if (!byDate[date]) byDate[date] = { tasks: [], totalHours: 0 };
+        byDate[date].tasks.push(t);
+        byDate[date].totalHours += Number(t.duration) || 0;
+      });
+    return Object.entries(byDate)
+      .filter(([, { totalHours }]) => totalHours > user.max_horas_day)
+      .map(([date, { tasks: dayTasks, totalHours }]) => ({ date, tasks: dayTasks, totalHours }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  })();
 
-  try {
+  const hasConflict = allConflictDays.length > 0;
+  const conflictTaskIds = new Set(allConflictDays.flatMap(d => d.tasks.map(t => t.id)));
+  const conflictActivityIds = new Set(
+    allConflictDays.flatMap(d => d.tasks.map(t => t.parent).filter(Boolean))
+  );
 
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/activities/${id}/`, {
-      method: "DELETE",
-      headers: {
-        "Authorization": `Token ${localStorage.getItem("token")}`
-      }
-    })
-
-    if(!res.ok) throw new Error()
-
-      setActivities(prev => prev.filter(a => a.id !== id))
-
-      Swal.fire({
-        icon: "success",
-        title: "Actividad eliminada",
-        text: `"${title}" fue eliminada correctamente`,
-        timer: 2000,
-        showConfirmButton: false
-      })
-
-  } catch {
-
-    Swal.fire({
-      icon: "error",
-      title: "Error",
-      text: "No se pudo eliminar la actividad"
-    })
-
+  function getActivityProgress(activityId) {
+    const actTasks = tasks.filter(t => t.parent === activityId);
+    const total = actTasks.length;
+    if (total === 0) return { total: 0, completed: 0, percentage: 0 };
+    const completed = actTasks.filter(t => t.status_id === 3).length;
+    return { total, completed, percentage: Math.round((completed / total) * 100) };
   }
-}
+
+  async function handleToggle(task) {
+    const isUncompleting = task.status_id === 3;
+
+    if (isUncompleting && user) {
+      const taskDate = task.due_date?.split("T")[0];
+      if (taskDate) {
+        const busyHours = activities
+          .filter(a =>
+            a.parent !== null &&
+            a.id !== task.id &&
+            a.status_id !== 3 &&
+            a.due_date?.split("T")[0] === taskDate
+          )
+          .reduce((sum, a) => sum + (Number(a.duration) || 0), 0);
+
+        const taskHours = Number(task.duration) || 0;
+        const totalAfter = busyHours + taskHours;
+
+        if (totalAfter > user.max_horas_day) {
+          const remaining = Math.max(0, user.max_horas_day - busyHours);
+          const canReduce = remaining > 0;
+          const canIncrease = totalAfter <= 24;
+
+          const result = await Swal.fire({
+            icon: "warning",
+            title: "Límite de horas diarias",
+            html: `
+              Desmarcar esta tarea añadiría <strong>${taskHours}h</strong> al día.<br>
+              Total resultante: <strong>${totalAfter}h</strong> · Límite: <strong>${user.max_horas_day}h</strong>.<br><br>
+              ${canReduce
+                ? `Tiempo libre disponible: <strong>${remaining}h</strong>.`
+                : '<span class="text-danger">No hay tiempo disponible para este día.</span>'}
+            `,
+            showConfirmButton: canReduce,
+            confirmButtonText: `Reducir esta tarea a ${remaining}h`,
+            showCancelButton: canIncrease,
+            cancelButtonText: "Aumentar límite diario",
+            showDenyButton: true,
+            denyButtonText: "Cancelar",
+          });
+
+          if (result.isConfirmed && canReduce) {
+            try {
+              const updated = await updateActivity(task.id, { status_id: 1, duration: remaining });
+              setActivities(prev =>
+                prev.map(a =>
+                  a.id === task.id
+                    ? { ...a, status_id: 1, status_display: updated.status_display, duration: remaining }
+                    : a
+                )
+              );
+            } catch {
+              Swal.fire({ icon: "error", title: "Error", text: "No se pudo actualizar la tarea" });
+            }
+          } else if (result.dismiss === Swal.DismissReason.cancel && canIncrease) {
+            const { value: newLimit } = await Swal.fire({
+              title: "Aumentar límite diario",
+              input: "number",
+              inputLabel: `Nuevo límite de horas por día (mínimo ${totalAfter}h)`,
+              inputValue: totalAfter,
+              inputAttributes: { min: totalAfter, step: 0.5, max: 24 },
+              showCancelButton: true,
+              inputValidator: (value) => {
+                if (!value || Number(value) < totalAfter) return `El límite debe ser al menos ${totalAfter}h`;
+                if (Number(value) > 24) return "No puede superar las 24h";
+              },
+            });
+            if (newLimit) {
+              try {
+                const tokenStr = localStorage.getItem("token");
+                const updatedUser = await updateProfileRequest(tokenStr, { max_horas_day: Number(newLimit) });
+                updateUserContext(updatedUser.data);
+                const updated = await toggleCompleteActivity(task);
+                setActivities(prev =>
+                  prev.map(a =>
+                    a.id === task.id ? { ...a, status_id: updated.status_id, status_display: updated.status_display } : a
+                  )
+                );
+              } catch {
+                Swal.fire({ icon: "error", title: "Error", text: "No se pudo actualizar" });
+              }
+            }
+          }
+          return;
+        }
+      }
+    }
+
+    // Completar o desmarcar sin conflicto
+    if (!isUncompleting) {
+      addCompleting(task.id);
+      const anim = new Promise(r => setTimeout(r, 550));
+      try {
+        const [updated] = await Promise.all([toggleCompleteActivity(task), anim]);
+        setActivities(prev =>
+          prev.map(a => a.id === task.id ? { ...a, status_id: updated.status_id, status_display: updated.status_display } : a)
+        );
+        refreshStats();
+      } catch {
+        Swal.fire({ icon: "error", title: "Error", text: "No se pudo actualizar la tarea" });
+      } finally {
+        removeCompleting(task.id);
+      }
+    } else {
+      try {
+        const updated = await toggleCompleteActivity(task);
+        setActivities(prev =>
+          prev.map(a => a.id === task.id ? { ...a, status_id: updated.status_id, status_display: updated.status_display } : a)
+        );
+        refreshStats();
+      } catch {
+        Swal.fire({ icon: "error", title: "Error", text: "No se pudo actualizar la tarea" });
+      }
+    }
+  }
+
+  async function handleCompleteMain(activity) {
+    addCompleting(activity.id);
+    const anim = new Promise(r => setTimeout(r, 550));
+    try {
+      await Promise.all([
+        (async () => {
+          await toggleCompleteActivity(activity);
+          const pendingSubtasks = activities.filter(a => a.parent === activity.id && a.status_id !== 3);
+          if (pendingSubtasks.length > 0) {
+            await Promise.all(pendingSubtasks.map(t => updateActivity(t.id, { status_id: 3 })));
+          }
+        })(),
+        anim,
+      ]);
+      setActivities(prev =>
+        prev.map(a => {
+          if (a.id === activity.id) return { ...a, status_id: 3, status_display: "Completada" };
+          if (a.parent === activity.id) return { ...a, status_id: 3, status_display: "Completada" };
+          return a;
+        })
+      );
+      refreshStats();
+    } catch {
+      Swal.fire({ icon: "error", title: "Error", text: "No se pudo completar la actividad" });
+    } finally {
+      removeCompleting(activity.id);
+    }
+  }
+
+  async function handleDelete(id, title) {
+    const result = await Swal.fire({
+      icon: "warning",
+      title: "¿Eliminar tarea?",
+      html: `<strong>${title}</strong><br><br>Esta acción no se puede deshacer.`,
+      showCancelButton: true,
+      confirmButtonText: "Eliminar",
+      cancelButtonText: "Cancelar",
+      confirmButtonColor: "#d33",
+    });
+    if (!result.isConfirmed) return;
+
+    try {
+      await apiDeleteActivity(id);
+      setActivities(prev => prev.filter(a => a.id !== id));
+      Swal.fire({ icon: "success", title: "Tarea eliminada", timer: 2000, showConfirmButton: false });
+    } catch {
+      Swal.fire({ icon: "error", title: "Error", text: "No se pudo eliminar la tarea" });
+    }
+  }
+
+  async function handlePostpone(task) {
+    const { value: note, isConfirmed } = await Swal.fire({
+      title: 'Posponer tarea',
+      html: '<p class="mb-2 text-start small text-muted">La tarea quedará como <strong>pospuesta</strong>. Puedes agregar una nota opcional que se conservará aunque cambie el estado.</p>',
+      input: 'textarea',
+      inputPlaceholder: 'Razón de la posposición (opcional)...',
+      inputAttributes: { rows: '3', style: 'resize:none;font-size:0.9rem' },
+      showCancelButton: true,
+      confirmButtonText: 'Posponer',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#6c757d',
+    });
+    if (!isConfirmed) return;
+    try {
+      const updated = await updateActivity(task.id, {
+        status_id: 5,
+        reason: note || '',
+      });
+      setActivities(prev =>
+        prev.map(a => a.id === task.id ? updated : a)
+      );
+      refreshStats();
+    } catch {
+      Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo posponer la tarea' });
+    }
+  }
+
+  function renderTask(task) {
+    return (
+      <TaskCard
+        key={task.id}
+        activity={task}
+        deleteActivity={handleDelete}
+        onToggle={handleToggle}
+        onPostpone={handlePostpone}
+        getPriorityBadge={getPriorityBadge}
+        formatDate={formatDate}
+        isCompleting={completing.has(task.id)}
+        isConflict={conflictTaskIds.has(task.id)}
+      />
+    );
+  }
 
   return (
     <div>
-      <div className="header-page row">
+      <div className="header-page row mb-4">
         <div className="col">
-          <h2>Actividades de Hoy</h2>
-          <p className="text-muted">Estas son las actividades que tienes programadas</p>
-            <span>¿Cómo se organiza esto?</span>
-            <i 
-              className="bi bi-info-circle text-muted ms-2" 
-              data-bs-toggle="tooltip" 
-              data-bs-placement="top" 
-              title="Las actividades se organizan primero por fecha (más antiguas arriba), luego por tiempo estimado (menor tiempo primero)."
-            ></i>
+          <h2 className="mb-1">Vista de Hoy</h2>
+          <p className="text-muted mb-0">
+            Tareas clasificadas por fecha de ejecución ·{" "}
+            <i className="bi bi-info-circle text-muted" title="Vencidas: fecha pasada. Hoy: fecha de hoy. Próximas: fecha futura." />
+          </p>
         </div>
         <div className="col-auto">
-          <Link to="/crear" className="btn btn-primary text-decoration-none">+ Crear actividad</Link>
+          <Link to="/crear" className="btn btn-primary">+ Crear actividad</Link>
         </div>
       </div>
-      
-      <div className="row">
+
+      {allConflictDays.length > 0 && (
+        <div className="alert alert-warning py-2 mb-4" role="alert">
+          <div className="d-flex align-items-center gap-2 mb-1">
+            <i className="bi bi-exclamation-triangle-fill"></i>
+            <strong className="small">
+              Conflicto de horas · límite {user.max_horas_day}h/día
+            </strong>
+          </div>
+          <div className="d-flex flex-wrap gap-2">
+            {allConflictDays.map(({ date, totalHours }) => {
+              const [y, m, d] = date.split('-').map(Number);
+              const label = date === today
+                ? "Hoy"
+                : new Date(y, m - 1, d).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+              return (
+                <span key={date} className="badge bg-warning text-dark fw-normal">
+                  {label} · {totalHours}h
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="row g-3 mb-5">
         <ActivityColumn
-            title="Vencidas"
-            subtitle="actividades"
-            activities={vencidas}
-            emptyText={
-              <div className="text-center">
-                <p>No hay actividades vencidas.</p>
-              </div>
-            }
-            bg="bg-danger-subtle"
-            border="border-danger-subtle"
-            deleteActivity={deleteActivity}
-            getPriorityBadge={getPriorityBadge}
-            formatDate={formatDate}
-          />
+          title="Vencidas"
+          activities={vencidas}
+          emptyText={<p className="text-center mb-0 small">Sin tareas vencidas.</p>}
+          bg="bg-danger-subtle"
+          border="border-danger-subtle"
+          renderCard={renderTask}
+        />
+        <ActivityColumn
+          title="Hoy"
+          activities={paraHoy}
+          emptyText={<p className="text-center mb-0 small">Sin tareas para hoy.</p>}
+          bg="bg-primary-subtle"
+          border="border-primary-subtle"
+          renderCard={renderTask}
+        />
+        <ActivityColumn
+          title="Próximas"
+          activities={proximas}
+          emptyText={<p className="text-center mb-0 small">Sin próximas tareas.</p>}
+          bg="bg-success-subtle"
+          border="border-success-subtle"
+          renderCard={renderTask}
+        />
+      </div>
 
-          <ActivityColumn
-            title="Hoy"
-            subtitle="actividades"
-            activities={paraHoy}
-            emptyText={
-              <div className="text-center">
-                <p>No hay actividades para hoy.</p>
-              </div>
-            }
-            bg="bg-primary-subtle"
-            border="border-primary-subtle"
-            deleteActivity={deleteActivity}
-            getPriorityBadge={getPriorityBadge}
-            formatDate={formatDate}
-          />
+      <div>
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <div>
+            <h4 className="mb-0">Actividades Principales</h4>
+            <p className="text-muted small mb-0">Solo actividades no completadas</p>
+          </div>
+          <span className="badge bg-secondary rounded-pill">{activeMainActivities.length}</span>
+        </div>
 
-          <ActivityColumn
-            title="Próximas"
-            subtitle="actividades"
-            activities={proximas}
-            emptyText={
-              <div className="text-center">
-                <p>No hay próximas actividades.</p>
-              </div>
-            }
-            bg="bg-success-subtle"
-            border="border-success-subtle"
-            deleteActivity={deleteActivity}
-            getPriorityBadge={getPriorityBadge}
-            formatDate={formatDate}
-          />
+        {activeMainActivities.length === 0 ? (
+          <p className="text-muted">No hay actividades principales pendientes.</p>
+        ) : (
+          <div className="table-responsive">
+            <table className="table table-hover align-middle">
+              <thead className="table-light">
+                <tr>
+                  <th style={{ width: "36px" }}></th>
+                  <th>Actividad</th>
+                  <th className="text-nowrap">Fecha límite</th>
+                  <th style={{ minWidth: "160px" }}>Progreso</th>
+                  <th className="text-nowrap">Subtareas</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeMainActivities.map(a => {
+                  const prog = getActivityProgress(a.id);
+                  return (
+                    <tr key={a.id} className={`${completing.has(a.id) ? "task-completing" : ""} ${conflictActivityIds.has(a.id) ? "table-warning" : ""}`}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          checked={false}
+                          onChange={() => handleCompleteMain(a)}
+                          style={{ cursor: "pointer" }}
+                          title="Marcar como completada"
+                        />
+                      </td>
+                      <td>
+                        <div className="d-flex align-items-center gap-1">
+                          {conflictActivityIds.has(a.id) && (
+                            <i
+                              className="bi bi-exclamation-triangle-fill text-warning flex-shrink-0"
+                              title="Esta actividad tiene tareas en conflicto de horas para hoy"
+                            />
+                          )}
+                          <Link
+                            to={`/actividad/${a.id}`}
+                            state={{ from: "/hoy" }}
+                            className="text-decoration-none fw-semibold text-dark task-title"
+                          >
+                            {a.title}
+                          </Link>
+                        </div>
+                        {a.description && (
+                          <div className="text-muted small"
+                            style={{
+                              overflow: "hidden",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 1,
+                              WebkitBoxOrient: "vertical",
+                            }}
+                          >
+                            {a.description}
+                          </div>
+                        )}
+                      </td>
+                      <td className="small text-nowrap">
+                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                          {isOverdue(a) && (
+                            <span className="badge text-bg-danger" title="Esta actividad está vencida">
+                              <i className="bi bi-exclamation-triangle-fill me-1" />
+                              Vencida
+                            </span>
+                          )}
+                          <span className={isOverdue(a) ? "text-danger fw-semibold" : "text-muted"}>
+                            {a.due_date ? formatDate(a.due_date) : "—"}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="d-flex align-items-center gap-2">
+                          <div className="progress flex-grow-1" style={{ height: "6px" }}>
+                            <div
+                              className="progress-bar bg-primary"
+                              style={{ width: `${prog.percentage}%` }}
+                            />
+                          </div>
+                          <small className="text-muted text-nowrap">{prog.percentage}%</small>
+                        </div>
+                      </td>
+                      <td className="text-muted small text-nowrap">
+                        {prog.completed}/{prog.total}
+                      </td>
+                      <td>
+                        <span className={`badge text-bg-${getStatusBadge(a.status_display)}`}>
+                          {a.status_display}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
