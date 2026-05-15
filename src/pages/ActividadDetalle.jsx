@@ -648,6 +648,96 @@ export default function ActividadDetalle() {
     }
   };
 
+  // Verifica conflicto de horas para una fecha+duración y ofrece resolverlo.
+  // Devuelve { finalDate, finalDuration } con los valores resueltos, o null si el usuario cancela.
+  const resolveRescheduleConflict = async (chosenDate, requiredHours, maxDateStr) => {
+    if (!user || !requiredHours) return { finalDate: chosenDate, finalDuration: requiredHours };
+
+    let hoursForDay = { total_hours: 0 };
+    try { hoursForDay = await getTimeToDate({ date: chosenDate }); } catch { /* 0h por defecto */ }
+
+    const usedHours = Number(hoursForDay.total_hours) || 0;
+    const totalHours = usedHours + requiredHours;
+
+    if (totalHours <= user.max_horas_day) return { finalDate: chosenDate, finalDuration: requiredHours };
+
+    const remaining = Math.max(0, user.max_horas_day - usedHours);
+    const showChangeOption = remaining > 0;
+    const showIncreaseOption = totalHours <= 24;
+
+    const nearestDate = maxDateStr
+      ? await findNearestAvailableDate(chosenDate, maxDateStr, requiredHours, user.max_horas_day)
+      : null;
+
+    const btnStyle = 'display:block;width:100%;padding:0.45rem 1rem;margin-bottom:8px;border:none;border-radius:0.375rem;cursor:pointer;font-size:0.9rem;color:#fff;text-align:left;';
+    const btns = [
+      showChangeOption && `<button id="swal-opt-change" style="${btnStyle}background:#3085d6">Reducir horas a ${remaining}h disponibles</button>`,
+      nearestDate      && `<button id="swal-opt-move"   style="${btnStyle}background:#198754">Mover al ${shortDateStr(nearestDate)} (fecha más cercana libre)</button>`,
+      showIncreaseOption && `<button id="swal-opt-increase" style="${btnStyle}background:#fd7e14">Subir mi límite diario</button>`,
+    ].filter(Boolean).join('');
+
+    if (!btns) {
+      await Swal.fire({ icon: 'error', title: 'Sin espacio disponible', text: `Ese día ya tiene ${usedHours}h y no hay margen para ${requiredHours}h más.` });
+      return null;
+    }
+
+    let chosenAction = null;
+    await Swal.fire({
+      title: 'Conflicto de tiempo diario',
+      html: `
+        <p style="font-size:0.9rem">
+          Ese día ya tiene <strong>${usedHours}h</strong> ocupadas y tu límite es <strong>${user.max_horas_day}h</strong>.
+          Esta tarea requiere <strong>${requiredHours}h</strong> — faltan <strong>${(totalHours - user.max_horas_day).toFixed(1)}h</strong> de espacio.
+        </p>
+        <p style="font-size:0.85rem;color:#6c757d">¿Cómo quieres resolver el conflicto?</p>
+        ${btns}
+      `,
+      showConfirmButton: false,
+      showCancelButton: true,
+      cancelButtonText: 'Cancelar',
+      didOpen: (popup) => {
+        popup.querySelector('#swal-opt-change')?.addEventListener('click',   () => { chosenAction = 'change_time';    Swal.close(); });
+        popup.querySelector('#swal-opt-move')?.addEventListener('click',     () => { chosenAction = 'move_date';      Swal.close(); });
+        popup.querySelector('#swal-opt-increase')?.addEventListener('click', () => { chosenAction = 'increase_limit'; Swal.close(); });
+      },
+    });
+
+    switch (chosenAction) {
+      case 'change_time':
+        return { finalDate: chosenDate, finalDuration: remaining };
+      case 'move_date':
+        return { finalDate: nearestDate, finalDuration: requiredHours };
+      case 'increase_limit': {
+        const { value: newLimit } = await Swal.fire({
+          title: 'Aumentar límite diario',
+          input: 'number',
+          inputLabel: `Nuevo límite de horas por día (mínimo ${totalHours}h)`,
+          inputValue: totalHours,
+          inputAttributes: { min: totalHours, step: 0.5 },
+          showCancelButton: true,
+          inputValidator: (value) => {
+            if (!value || Number(value) < totalHours) return `El nuevo límite debe ser al menos ${totalHours}h`;
+            if (Number(value) > 24) return 'El límite diario no puede superar las 24 horas';
+          },
+        });
+        if (!newLimit) return null;
+        try {
+          const token = localStorage.getItem('token');
+          const updatedUser = await updateProfileRequest(token, { max_horas_day: Number(newLimit) });
+          updateUserContext(updatedUser.data);
+        } catch (err) {
+          console.error(err);
+          setError('Error al actualizar límite diario');
+          setTimeout(() => setError(null), 4000);
+          return null;
+        }
+        return { finalDate: chosenDate, finalDuration: requiredHours };
+      }
+      default:
+        return null; // usuario canceló el diálogo de conflicto
+    }
+  };
+
   const handleRescheduleCurrentActivity = async () => {
     const maxDate = actividad?.parent_due_date ? formatDateForInput(actividad.parent_due_date) : undefined;
     const currentDate = formatDateForInput(actividad.due_date);
@@ -668,8 +758,16 @@ export default function ActividadDetalle() {
       },
     });
     if (!isConfirmed || !newDate) return;
+
+    const resolved = await resolveRescheduleConflict(newDate, Number(actividad.duration) || 0, maxDate);
+    if (!resolved) return;
+
     try {
-      const updated = await updateActivity(actividad.id, { due_date: `${newDate}T00:00:00Z`, status_id: 1 });
+      const updated = await updateActivity(actividad.id, {
+        due_date: `${resolved.finalDate}T00:00:00Z`,
+        duration: resolved.finalDuration || undefined,
+        status_id: 1,
+      });
       setActividad(updated);
       refreshStats();
       setSuccessMessage('Tarea reprogramada');
@@ -694,15 +792,21 @@ export default function ActividadDetalle() {
       confirmButtonText: 'Reprogramar',
       cancelButtonText: 'Cancelar',
       confirmButtonColor: '#0d6efd',
+      cancelButtonColor: '#6c757d',
       inputValidator: (value) => {
         if (!value) return 'Selecciona una fecha';
-        if (maxDate && value > maxDate) return `La fecha no puede superar la fecha límite de la actividad`;
+        if (maxDate && value > maxDate) return 'La fecha no puede superar la fecha límite de la actividad';
       },
     });
     if (!isConfirmed || !newDate) return;
+
+    const resolved = await resolveRescheduleConflict(newDate, Number(subtask.duration) || 0, maxDate);
+    if (!resolved) return;
+
     try {
       const updated = await updateActivity(subtask.id, {
-        due_date: `${newDate}T00:00:00Z`,
+        due_date: `${resolved.finalDate}T00:00:00Z`,
+        duration: resolved.finalDuration || undefined,
         status_id: 1,
       });
       setSubtasks(prev =>

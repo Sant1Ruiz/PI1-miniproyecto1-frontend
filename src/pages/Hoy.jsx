@@ -136,6 +136,7 @@ export default function Hoy() {
             a.parent !== null &&
             a.id !== task.id &&
             a.status_id !== 3 &&
+            a.status_id !== 5 &&
             a.due_date?.split("T")[0] === taskDate
           )
           .reduce((sum, a) => sum + (Number(a.duration) || 0), 0);
