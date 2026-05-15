@@ -80,25 +80,30 @@ export default function Progreso() {
         <p className="text-muted mb-0">Visualiza tu rendimiento y el estado de tus tareas</p>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — métricas de Actividades principales */}
+      <div className="mb-2">
+        <span className="badge text-bg-primary me-1"><i className="bi bi-folder me-1"/>Actividades</span>
+        <small className="text-muted">Métricas sobre tus actividades principales</small>
+      </div>
       <div className="row g-3 mb-4">
-        <KpiCard label="Total de Tareas" value={total}
+        <KpiCard label="Total de Actividades" value={total}
           icon="bi-list-task" iconBg="#f3e8ff" iconColor="#9333ea" />
-        <KpiCard label="Completadas" value={completadas}
+        <KpiCard label="Actividades Completadas" value={completadas}
           icon="bi-check-circle" iconBg="#dcfce7" iconColor="#16a34a" progress={porcentaje} />
-        <KpiCard label="Pendientes" value={pendientes}
+        <KpiCard label="Actividades Pendientes" value={pendientes}
           icon="bi-clock" iconBg="#dbeafe" iconColor="#2563eb" />
-        <KpiCard label="Vencidas" value={vencidas}
+        <KpiCard label="Actividades Vencidas" value={vencidas}
           icon="bi-exclamation-circle" iconBg="#fee2e2" iconColor="#dc2626" />
       </div>
 
-      {/* Progreso General */}
+      {/* Progreso General de Actividades */}
       <div className="card border rounded-3 mb-4">
         <div className="card-body">
-          <h5 className="mb-3">
+          <h5 className="mb-1">
             <i className="bi bi-graph-up me-2" />
-            Progreso General
+            Progreso General de Actividades
           </h5>
+          <p className="text-muted small mb-3">Basado en tus actividades principales</p>
 
           <div className="d-flex justify-content-between align-items-center mb-1">
             <span className="fw-semibold">Tasa de Completación</span>
@@ -107,12 +112,16 @@ export default function Progreso() {
           <div className="progress mb-1" style={{ height: 10 }}>
             <div className="progress-bar bg-primary" style={{ width: `${porcentaje}%` }} />
           </div>
-          <p className="text-muted small mb-4">{completadas} de {total} tareas completadas</p>
+          <p className="text-muted small mb-4">{completadas} de {total} actividades completadas</p>
 
+          <div className="d-flex align-items-center gap-2 mb-2">
+            <span className="badge text-bg-secondary"><i className="bi bi-check2-square me-1"/>Tareas</span>
+            <small className="text-muted">Métricas sobre las tareas (subtareas) de tus actividades</small>
+          </div>
           <div className="row g-3">
-            <MiniStat label="Para Hoy"  value={paraHoy}          icon="bi-calendar3"         iconBg="#dbeafe" iconColor="#2563eb" />
-            <MiniStat label="Próximas"  value={proximas}         icon="bi-clock"             iconBg="#f3e8ff" iconColor="#9333ea" />
-            <MiniStat label="Vencidas"  value={subtareasVencidas} icon="bi-exclamation-circle" iconBg="#fee2e2" iconColor="#dc2626" />
+            <MiniStat label="Tareas para Hoy"    value={paraHoy}           icon="bi-calendar3"          iconBg="#dbeafe" iconColor="#2563eb" />
+            <MiniStat label="Tareas Próximas"    value={proximas}          icon="bi-clock"              iconBg="#f3e8ff" iconColor="#9333ea" />
+            <MiniStat label="Tareas Vencidas"    value={subtareasVencidas} icon="bi-exclamation-circle" iconBg="#fee2e2" iconColor="#dc2626" />
           </div>
         </div>
       </div>
