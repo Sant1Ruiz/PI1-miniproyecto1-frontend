@@ -14,6 +14,7 @@ export default function Crear() {
   const [durationHours, setDurationHours] = useState("")
   const [priority, setPriority] = useState("1")
   const [errors, setErrors] = useState({})
+  const [submitting, setSubmitting] = useState(false)
   const [priorityMssg, setPriorityMsg] = useState("")
   const [alert, setAlert] = useState({
     type: "primary",
@@ -72,6 +73,7 @@ export default function Crear() {
     }
 
     if(!validateForm()) return
+    setSubmitting(true)
       try {
         const activity = await createActivity(payload)
 
@@ -94,6 +96,7 @@ export default function Crear() {
 
       }catch(err){
         console.error(err)
+        setSubmitting(false)
 
         setAlert({
           type: "danger",
@@ -212,8 +215,13 @@ export default function Crear() {
                   </Link>
                 </div>
                 <div className="col text-end">
-                  <button type="submit" className="btn btn-primary w-100">
-                    Crear Actividad
+                  <button type="submit" className="btn btn-primary w-100" disabled={submitting}>
+                    {submitting ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Creando...
+                      </>
+                    ) : "Crear Actividad"}
                   </button>
                 </div>
               </div>              

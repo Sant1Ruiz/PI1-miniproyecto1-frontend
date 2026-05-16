@@ -11,6 +11,7 @@ import {
   getTimeToDate,
 } from "../api/activities";
 import { useAuth } from "../context/AuthContext";
+import { useActivityStats } from "../context/ActivityStatsContext";
 import { updateProfileRequest } from "../api/auth";
 import Swal from "sweetalert2";
 
@@ -97,6 +98,7 @@ export default function ActividadDetalle() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, updateUserContext } = useAuth();
+  const { refresh: refreshStats } = useActivityStats();
   const [actividad, setActividad] = useState(null);
   const [subtasks, setSubtasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -357,6 +359,7 @@ export default function ActividadDetalle() {
     try {
       const updated = await toggleCompleteActivity(actividad);
       setActividad(updated);
+      refreshStats();
 
       if (activityParent === null && updated.status_id === 3) {
         const pendingSubtasks = subtasks.filter(s => s.status_id !== 3);
@@ -539,11 +542,39 @@ export default function ActividadDetalle() {
   const handleToggle = async (subtask) => {
     try {
       const updated = await toggleCompleteActivity(subtask);
-      setSubtasks(prev =>
-        prev.map(s =>
-          s.id === subtask.id ? { ...s, status_id: updated.status_id } : s
-        )
+      const updatedSubtasks = subtasks.map(s =>
+        s.id === subtask.id ? { ...s, status_id: updated.status_id, status_display: updated.status_display } : s
       );
+      setSubtasks(updatedSubtasks);
+      refreshStats();
+
+      // Issue 7: si todas las tareas quedaron completadas, preguntar si completar la actividad padre
+      if (
+        updated.status_id === 3 &&
+        activityParent === null &&
+        actividad.status_id !== 3 &&
+        updatedSubtasks.length > 0 &&
+        updatedSubtasks.every(s => s.status_id === 3)
+      ) {
+        const result = await Swal.fire({
+          icon: 'success',
+          title: '¡Todas las tareas completadas!',
+          text: '¿Deseas marcar la actividad completa también?',
+          showConfirmButton: true,
+          confirmButtonText: 'Sí, completar actividad',
+          confirmButtonColor: '#198754',
+          showCancelButton: true,
+          cancelButtonText: 'No por ahora',
+          cancelButtonColor: '#6c757d',
+        });
+        if (result.isConfirmed) {
+          const updatedActivity = await updateActivity(actividad.id, { status_id: 3 });
+          setActividad(updatedActivity);
+          refreshStats();
+          setSuccessMessage('✓ Actividad completada');
+          setTimeout(() => setSuccessMessage(null), 3000);
+        }
+      }
     } catch (err) {
       console.error(err);
       setError('Error al actualizar subtarea');
@@ -561,7 +592,8 @@ export default function ActividadDetalle() {
       showCancelButton: true,
       confirmButtonText: 'Posponer',
       cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#6c757d',
+      confirmButtonColor: '#f59e0b',
+      cancelButtonColor: '#6c757d',
     });
     if (!isConfirmed) return;
     try {
@@ -572,6 +604,7 @@ export default function ActividadDetalle() {
       setSubtasks(prev =>
         prev.map(s => s.id === subtask.id ? updated : s)
       );
+      refreshStats();
       Swal.fire({
         toast: true,
         position: 'top-end',
@@ -589,6 +622,163 @@ export default function ActividadDetalle() {
     }
   };
 
+  const handlePostponeCurrentActivity = async () => {
+    const { value: noteText, isConfirmed } = await Swal.fire({
+      title: 'Posponer tarea',
+      html: '<p class="mb-2 text-start small text-muted">La tarea quedará como <strong>pospuesta</strong>. Puedes agregar una nota opcional que se conservará aunque cambie el estado.</p>',
+      input: 'textarea',
+      inputPlaceholder: 'Razón de la posposición (opcional)...',
+      inputAttributes: { rows: '3', style: 'resize:none;font-size:0.9rem' },
+      showCancelButton: true,
+      confirmButtonText: 'Posponer',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#f59e0b',
+      cancelButtonColor: '#6c757d',
+    });
+    if (!isConfirmed) return;
+    try {
+      const updated = await updateActivity(actividad.id, { status_id: 5, reason: noteText || '' });
+      setActividad(updated);
+      refreshStats();
+      Swal.fire({ toast: true, position: 'top-end', icon: 'info', title: 'Tarea pospuesta', text: actividad.title, showConfirmButton: false, timer: 2500, timerProgressBar: true });
+    } catch (err) {
+      console.error(err);
+      setError('Error al posponer la tarea');
+      setTimeout(() => setError(null), 4000);
+    }
+  };
+
+  // Verifica conflicto de horas para una fecha+duración y ofrece resolverlo.
+  // Devuelve { finalDate, finalDuration } con los valores resueltos, o null si el usuario cancela.
+  const resolveRescheduleConflict = async (chosenDate, requiredHours, maxDateStr) => {
+    if (!user || !requiredHours) return { finalDate: chosenDate, finalDuration: requiredHours };
+
+    let hoursForDay = { total_hours: 0 };
+    try { hoursForDay = await getTimeToDate({ date: chosenDate }); } catch { /* 0h por defecto */ }
+
+    const usedHours = Number(hoursForDay.total_hours) || 0;
+    const totalHours = usedHours + requiredHours;
+
+    if (totalHours <= user.max_horas_day) return { finalDate: chosenDate, finalDuration: requiredHours };
+
+    const remaining = Math.max(0, user.max_horas_day - usedHours);
+    const showChangeOption = remaining > 0;
+    const showIncreaseOption = totalHours <= 24;
+
+    const nearestDate = maxDateStr
+      ? await findNearestAvailableDate(chosenDate, maxDateStr, requiredHours, user.max_horas_day)
+      : null;
+
+    const btnStyle = 'display:block;width:100%;padding:0.45rem 1rem;margin-bottom:8px;border:none;border-radius:0.375rem;cursor:pointer;font-size:0.9rem;color:#fff;text-align:left;';
+    const btns = [
+      showChangeOption && `<button id="swal-opt-change" style="${btnStyle}background:#3085d6">Reducir horas a ${remaining}h disponibles</button>`,
+      nearestDate      && `<button id="swal-opt-move"   style="${btnStyle}background:#198754">Mover al ${shortDateStr(nearestDate)} (fecha más cercana libre)</button>`,
+      showIncreaseOption && `<button id="swal-opt-increase" style="${btnStyle}background:#fd7e14">Subir mi límite diario</button>`,
+    ].filter(Boolean).join('');
+
+    if (!btns) {
+      await Swal.fire({ icon: 'error', title: 'Sin espacio disponible', text: `Ese día ya tiene ${usedHours}h y no hay margen para ${requiredHours}h más.` });
+      return null;
+    }
+
+    let chosenAction = null;
+    await Swal.fire({
+      title: 'Conflicto de tiempo diario',
+      html: `
+        <p style="font-size:0.9rem">
+          Ese día ya tiene <strong>${usedHours}h</strong> ocupadas y tu límite es <strong>${user.max_horas_day}h</strong>.
+          Esta tarea requiere <strong>${requiredHours}h</strong> — faltan <strong>${(totalHours - user.max_horas_day).toFixed(1)}h</strong> de espacio.
+        </p>
+        <p style="font-size:0.85rem;color:#6c757d">¿Cómo quieres resolver el conflicto?</p>
+        ${btns}
+      `,
+      showConfirmButton: false,
+      showCancelButton: true,
+      cancelButtonText: 'Cancelar',
+      didOpen: (popup) => {
+        popup.querySelector('#swal-opt-change')?.addEventListener('click',   () => { chosenAction = 'change_time';    Swal.close(); });
+        popup.querySelector('#swal-opt-move')?.addEventListener('click',     () => { chosenAction = 'move_date';      Swal.close(); });
+        popup.querySelector('#swal-opt-increase')?.addEventListener('click', () => { chosenAction = 'increase_limit'; Swal.close(); });
+      },
+    });
+
+    switch (chosenAction) {
+      case 'change_time':
+        return { finalDate: chosenDate, finalDuration: remaining };
+      case 'move_date':
+        return { finalDate: nearestDate, finalDuration: requiredHours };
+      case 'increase_limit': {
+        const { value: newLimit } = await Swal.fire({
+          title: 'Aumentar límite diario',
+          input: 'number',
+          inputLabel: `Nuevo límite de horas por día (mínimo ${totalHours}h)`,
+          inputValue: totalHours,
+          inputAttributes: { min: totalHours, step: 0.5 },
+          showCancelButton: true,
+          inputValidator: (value) => {
+            if (!value || Number(value) < totalHours) return `El nuevo límite debe ser al menos ${totalHours}h`;
+            if (Number(value) > 24) return 'El límite diario no puede superar las 24 horas';
+          },
+        });
+        if (!newLimit) return null;
+        try {
+          const token = localStorage.getItem('token');
+          const updatedUser = await updateProfileRequest(token, { max_horas_day: Number(newLimit) });
+          updateUserContext(updatedUser.data);
+        } catch (err) {
+          console.error(err);
+          setError('Error al actualizar límite diario');
+          setTimeout(() => setError(null), 4000);
+          return null;
+        }
+        return { finalDate: chosenDate, finalDuration: requiredHours };
+      }
+      default:
+        return null; // usuario canceló el diálogo de conflicto
+    }
+  };
+
+  const handleRescheduleCurrentActivity = async () => {
+    const maxDate = actividad?.parent_due_date ? formatDateForInput(actividad.parent_due_date) : undefined;
+    const currentDate = formatDateForInput(actividad.due_date);
+    const { value: newDate, isConfirmed } = await Swal.fire({
+      title: 'Reprogramar tarea',
+      html: '<p class="mb-2 text-start small text-muted">Elige la nueva fecha. La tarea volverá a estado <strong>pendiente</strong>.</p>',
+      input: 'date',
+      inputValue: currentDate,
+      inputAttributes: { ...(maxDate && { max: maxDate }) },
+      showCancelButton: true,
+      confirmButtonText: 'Reprogramar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#0d6efd',
+      cancelButtonColor: '#6c757d',
+      inputValidator: (value) => {
+        if (!value) return 'Selecciona una fecha';
+        if (maxDate && value > maxDate) return 'La fecha no puede superar la fecha límite de la actividad';
+      },
+    });
+    if (!isConfirmed || !newDate) return;
+
+    const resolved = await resolveRescheduleConflict(newDate, Number(actividad.duration) || 0, maxDate);
+    if (!resolved) return;
+
+    try {
+      const updated = await updateActivity(actividad.id, {
+        due_date: `${resolved.finalDate}T00:00:00Z`,
+        duration: resolved.finalDuration || undefined,
+        status_id: 1,
+      });
+      setActividad(updated);
+      refreshStats();
+      setSuccessMessage('Tarea reprogramada');
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error(err);
+      setError('Error al reprogramar la tarea');
+      setTimeout(() => setError(null), 4000);
+    }
+  };
+
   const handleReschedule = async (subtask) => {
     const maxDate = actividad?.due_date ? formatDateForInput(actividad.due_date) : undefined;
     const currentDate = formatDateForInput(subtask.due_date);
@@ -602,15 +792,21 @@ export default function ActividadDetalle() {
       confirmButtonText: 'Reprogramar',
       cancelButtonText: 'Cancelar',
       confirmButtonColor: '#0d6efd',
+      cancelButtonColor: '#6c757d',
       inputValidator: (value) => {
         if (!value) return 'Selecciona una fecha';
-        if (maxDate && value > maxDate) return `La fecha no puede superar la fecha límite de la actividad`;
+        if (maxDate && value > maxDate) return 'La fecha no puede superar la fecha límite de la actividad';
       },
     });
     if (!isConfirmed || !newDate) return;
+
+    const resolved = await resolveRescheduleConflict(newDate, Number(subtask.duration) || 0, maxDate);
+    if (!resolved) return;
+
     try {
       const updated = await updateActivity(subtask.id, {
-        due_date: `${newDate}T00:00:00Z`,
+        due_date: `${resolved.finalDate}T00:00:00Z`,
+        duration: resolved.finalDuration || undefined,
         status_id: 1,
       });
       setSubtasks(prev =>
@@ -712,6 +908,24 @@ export default function ActividadDetalle() {
           <i className="bi bi-patch-check me-2"></i>
           {actividad.status_id === 3 ? 'Completada' : 'Completar'}
         </button>
+        {activityParent !== null && actividad.status_id !== 3 && actividad.status_id !== 5 && !isEditing && (
+          <button
+            className="btn btn-warning btn-sm me-2"
+            onClick={handlePostponeCurrentActivity}
+            title="Posponer esta tarea"
+          >
+            <i className="bi bi-pause-circle me-1"></i> Posponer
+          </button>
+        )}
+        {activityParent !== null && actividad.status_id === 5 && !isEditing && (
+          <button
+            className="btn btn-outline-primary btn-sm me-2"
+            onClick={handleRescheduleCurrentActivity}
+            title="Reprogramar esta tarea"
+          >
+            <i className="bi bi-calendar-check me-1"></i> Reprogramar
+          </button>
+        )}
         {isEditing ? (
           <>
             <button className="btn btn-success btn-sm me-2" onClick={handleSaveEdit}>
@@ -860,6 +1074,24 @@ export default function ActividadDetalle() {
           </div>
         </div>
       </div>
+
+      {/* Barra de progreso — solo en actividades principales con subtareas */}
+      {activityParent === null && subtasks.length > 0 && (() => {
+        const total = subtasks.length;
+        const completed = subtasks.filter(s => s.status_id === 3).length;
+        const pct = Math.round((completed / total) * 100);
+        return (
+          <div className="mb-4">
+            <div className="d-flex justify-content-between align-items-center mb-1">
+              <small className="text-muted fw-semibold">Progreso de tareas</small>
+              <small className="text-muted">{completed}/{total} · {pct}%</small>
+            </div>
+            <div className="progress" style={{ height: 6 }}>
+              <div className="progress-bar bg-success" style={{ width: `${pct}%`, transition: 'width 0.4s ease' }} />
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Notas de posposición — solo en subtareas */}
       {activityParent !== null && parseNotes(actividad.notes).length > 0 && (
@@ -1116,7 +1348,12 @@ export default function ActividadDetalle() {
                       Cancelar
                     </button>
                     <button type="submit" className="btn btn-primary" disabled={creating}>
-                      {creating ? 'Creando...' : 'Crear Subtarea'}
+                      {creating ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                          Creando...
+                        </>
+                      ) : 'Crear Subtarea'}
                     </button>
                   </div>
                 </form>

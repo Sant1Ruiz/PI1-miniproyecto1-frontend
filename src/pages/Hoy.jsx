@@ -13,6 +13,12 @@ import { getTodayInColombia } from "../utils/dateUtils";
 export default function Hoy() {
   const [activities, setActivities] = useState([]);
   const [completing, setCompleting] = useState(new Set());
+  const [showPostponedAlert, setShowPostponedAlert] = useState(() => {
+    const dismissed = localStorage.getItem('postponed_alert_dismissed_at');
+    if (!dismissed) return true;
+    return Date.now() - Number(dismissed) > 24 * 60 * 60 * 1000;
+  });
+  const [showHoursHint, setShowHoursHint] = useState(false);
   const { token, user, updateUserContext } = useAuth();
   const { refresh: refreshStats } = useActivityStats();
   const today = getTodayInColombia();
@@ -49,6 +55,11 @@ export default function Hoy() {
       timerProgressBar: true,
     });
   }
+
+  useEffect(() => {
+    if (!user) return;
+    setShowHoursHint(!localStorage.getItem(`hint_hours_seen_${user.id}`));
+  }, [user]);
 
   useEffect(() => {
     if (!token) { setActivities([]); return; }
@@ -125,6 +136,7 @@ export default function Hoy() {
             a.parent !== null &&
             a.id !== task.id &&
             a.status_id !== 3 &&
+            a.status_id !== 5 &&
             a.due_date?.split("T")[0] === taskDate
           )
           .reduce((sum, a) => sum + (Number(a.duration) || 0), 0);
@@ -208,11 +220,45 @@ export default function Hoy() {
       const anim = new Promise(r => setTimeout(r, 550));
       try {
         const [updated] = await Promise.all([toggleCompleteActivity(task), anim]);
-        setActivities(prev =>
-          prev.map(a => a.id === task.id ? { ...a, status_id: updated.status_id, status_display: updated.status_display } : a)
+        const nextActivities = activities.map(a =>
+          a.id === task.id ? { ...a, status_id: updated.status_id, status_display: updated.status_display } : a
         );
+        setActivities(nextActivities);
         refreshStats();
-        if (updated.status_id === 3) showCompletedToast(task.title);
+        if (updated.status_id === 3) {
+          showCompletedToast(task.title);
+          // Verificar si todas las tareas del padre quedaron completadas
+          if (task.parent) {
+            const siblingTasks = nextActivities.filter(a => a.parent === task.parent);
+            const parentActivity = nextActivities.find(a => a.id === task.parent);
+            if (
+              siblingTasks.length > 0 &&
+              siblingTasks.every(t => t.status_id === 3) &&
+              parentActivity &&
+              parentActivity.status_id !== 3
+            ) {
+              const result = await Swal.fire({
+                icon: 'success',
+                title: '¡Todas las tareas completadas!',
+                text: `¿Deseas marcar "${parentActivity.title}" como completada también?`,
+                showConfirmButton: true,
+                confirmButtonText: 'Sí, completar actividad',
+                confirmButtonColor: '#198754',
+                showCancelButton: true,
+                cancelButtonText: 'No por ahora',
+                cancelButtonColor: '#6c757d',
+              });
+              if (result.isConfirmed) {
+                await updateActivity(task.parent, { status_id: 3 });
+                setActivities(prev =>
+                  prev.map(a => a.id === task.parent ? { ...a, status_id: 3, status_display: 'Completada' } : a)
+                );
+                refreshStats();
+                showCompletedToast(parentActivity.title, { isMainActivity: true });
+              }
+            }
+          }
+        }
       } catch {
         Swal.fire({ icon: "error", title: "Error", text: "No se pudo actualizar la tarea" });
       } finally {
@@ -292,7 +338,8 @@ export default function Hoy() {
       showCancelButton: true,
       confirmButtonText: 'Posponer',
       cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#6c757d',
+      confirmButtonColor: '#f59e0b',
+      cancelButtonColor: '#6c757d',
     });
     if (!isConfirmed) return;
     try {
@@ -364,6 +411,76 @@ export default function Hoy() {
           </div>
         </div>
       )}
+
+      {showHoursHint && user && (
+        <div className="alert alert-info py-2 mb-4 d-flex justify-content-between align-items-start" role="alert">
+          <div>
+            <div className="d-flex align-items-center gap-2 mb-1">
+              <i className="bi bi-info-circle-fill"></i>
+              <strong className="small">¿Qué son las horas estimadas?</strong>
+            </div>
+            <p className="small mb-1 text-muted">
+              Cada tarea tiene una <strong>duración estimada en horas</strong>. El sistema usa este valor para avisarte
+              cuando planeas más horas de las que tienes disponibles en un día.
+            </p>
+            <p className="small mb-0 text-muted">
+              Actualmente tu límite diario es de <strong>{user.max_horas_day}h</strong>. Puedes modificarlo en{' '}
+              <a href="/perfil" className="alert-link">tu perfil</a>.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-close ms-3 flex-shrink-0"
+            aria-label="Cerrar"
+            onClick={() => {
+              localStorage.setItem(`hint_hours_seen_${user.id}`, '1');
+              setShowHoursHint(false);
+            }}
+          />
+        </div>
+      )}
+
+      {showPostponedAlert && (() => {
+        const postponedTasks = tasks.filter(t => t.status_id === 5);
+        if (postponedTasks.length === 0) return null;
+        const byActivity = postponedTasks.reduce((acc, t) => {
+          const parent = mainActivities.find(a => a.id === t.parent);
+          const key = t.parent;
+          if (!acc[key]) acc[key] = { title: parent?.title || 'Actividad', tasks: [] };
+          acc[key].tasks.push(t);
+          return acc;
+        }, {});
+        return (
+          <div className="alert alert-secondary py-2 mb-4 d-flex justify-content-between align-items-start" role="alert">
+            <div>
+              <div className="d-flex align-items-center gap-2 mb-1">
+                <i className="bi bi-pause-circle-fill text-secondary"></i>
+                <strong className="small">Tienes {postponedTasks.length} tarea{postponedTasks.length > 1 ? 's' : ''} pospuesta{postponedTasks.length > 1 ? 's' : ''}</strong>
+              </div>
+              <div className="d-flex flex-column gap-1">
+                {Object.entries(byActivity).map(([key, { title, tasks: pt }]) => (
+                  <span key={key} className="small text-muted">
+                    <i className="bi bi-folder2-open me-1" />
+                    <Link to={`/actividad/${key}`} className="fw-semibold text-dark text-decoration-none me-1">
+                      {title}
+                    </Link>
+                    <span className="text-muted">· {pt.map(t => t.title).join(', ')}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-close ms-3 flex-shrink-0"
+              aria-label="Cerrar"
+              onClick={() => {
+                localStorage.setItem('postponed_alert_dismissed_at', String(Date.now()));
+                setShowPostponedAlert(false);
+              }}
+            />
+          </div>
+        );
+      })()}
 
       <div className="row g-3 mb-5">
         <ActivityColumn
