@@ -109,7 +109,11 @@ export default function App() {
 
 function SidebarKpi({ label, value, icon, iconBg, iconColor }) {
   return (
-    <div className="d-flex align-items-center gap-2 bg-white rounded-2 px-2 py-1 border">
+    <Link
+      to="/progreso"
+      className="d-flex align-items-center gap-2 bg-white rounded-2 px-2 py-1 border text-decoration-none text-dark"
+      title={`Ver progreso: ${label}`}
+    >
       <div className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
         style={{ width: 26, height: 26, background: iconBg }}>
         <i className={`bi ${icon}`} style={{ color: iconColor, fontSize: 12 }} />
@@ -118,6 +122,6 @@ function SidebarKpi({ label, value, icon, iconBg, iconColor }) {
         <p className="mb-0 text-muted" style={{ fontSize: "0.65rem", lineHeight: 1.2 }}>{label}</p>
         <span className="fw-bold" style={{ fontSize: "0.8rem" }}>{value}</span>
       </div>
-    </div>
+    </Link>
   );
 }
